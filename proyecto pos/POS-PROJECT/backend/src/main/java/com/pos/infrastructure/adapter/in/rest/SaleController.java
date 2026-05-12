@@ -8,7 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/sales")
+@RequestMapping("/api/v1/sales")
 public class SaleController {
 
     private final SaleManagementPort port;
