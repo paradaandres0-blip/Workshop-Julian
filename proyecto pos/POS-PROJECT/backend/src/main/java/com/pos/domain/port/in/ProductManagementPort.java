@@ -9,6 +9,7 @@ public interface ProductManagementPort {
     Product updateProduct(String id, UpdateProductCommand cmd);
     Product getProduct(String id);
     List<Product> getAllProducts();
+    List<Product> searchProducts(String query);
     void deleteProduct(String id);
 
     record CreateProductCommand(String code, String name, BigDecimal price, int stockLevel, int lowStockThreshold) {}

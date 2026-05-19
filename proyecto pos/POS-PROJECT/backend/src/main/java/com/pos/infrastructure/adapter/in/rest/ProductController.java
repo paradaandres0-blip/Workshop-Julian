@@ -24,6 +24,11 @@ public class ProductController {
         return ResponseEntity.ok(port.getAllProducts());
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<List<Product>> searchProducts(@RequestParam String q) {
+        return ResponseEntity.ok(port.searchProducts(q));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<Product> getProduct(@PathVariable String id) {
         return ResponseEntity.ok(port.getProduct(id));

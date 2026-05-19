@@ -43,6 +43,8 @@ public class CreateSaleUseCase implements SaleManagementPort {
         }
         
         Product product = productRepository.findById(cmd.productId())
+                .or(() -> productRepository.findByCode(cmd.productId()))
+                .or(() -> productRepository.findByName(cmd.productId()))
                 .orElseThrow(() -> new IllegalArgumentException("Product not found"));
                 
         if (product.getStockLevel() < cmd.quantity()) {

@@ -61,6 +61,16 @@ public class ProductManagementUseCase implements ProductManagementPort {
     }
 
     @Override
+    public List<Product> searchProducts(String query) {
+        String q = query.toLowerCase().trim();
+        return productRepository.findAll().stream()
+                .filter(p -> p.getName().toLowerCase().contains(q)
+                          || p.getCode().toLowerCase().contains(q))
+                .limit(10)
+                .toList();
+    }
+
+    @Override
     public void deleteProduct(String id) {
         if (productRepository.hasSaleHistory(id)) {
             throw new ProductHasSalesException("Product has associated sales and cannot be deleted.");

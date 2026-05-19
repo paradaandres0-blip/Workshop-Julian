@@ -34,6 +34,13 @@ public class ProductRepositoryAdapter implements ProductRepository {
     }
 
     @Override
+    public Optional<Product> findByName(String name) {
+        return products.values().stream()
+                .filter(p -> p.getName().equalsIgnoreCase(name))
+                .findFirst();
+    }
+
+    @Override
     public List<Product> findAll() {
         return new ArrayList<>(products.values());
     }
