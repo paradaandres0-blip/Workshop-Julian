@@ -105,5 +105,7 @@ npm test   # Jest + Sinon
 - Especificaciones completas en `design.md` y `requirements.md` dentro de `pos-repo/`.
 
 ---
+Evidencias:
+<img width="1795" height="880" alt="image" src="https://github.com/user-attachments/assets/c00bf171-aef6-4dc9-a62e-2e220d987523" />
 
 *¡Listo! Con estos pasos puedes clonar, construir y probar el POS localmente.*
