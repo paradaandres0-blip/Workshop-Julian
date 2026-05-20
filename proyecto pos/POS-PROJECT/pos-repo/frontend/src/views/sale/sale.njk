@@ -1,0 +1,276 @@
+{% extends "layout.njk" %}
+
+{% block content %}
+
+{# ── Top bar ─────────────────────────────────────────── #}
+<div style="display:flex; align-items:center; gap:1rem; margin-bottom:1.25rem; flex-wrap:wrap;">
+  <h1 style="margin:0; flex:0 0 auto; font-size:1.5rem;">Ventas Supermercado El Tendedor</h1>
+  <div id="sale-status-chip" style="display:none;" class="stat-chip">🟢 Venta activa</div>
+  <div style="flex:1; display:flex; gap:0.75rem; align-items:center; justify-content:flex-end; flex-wrap:wrap;">
+    <button class="btn btn-primary" id="btn-start" onclick="startSale()">＋ Nueva Venta</button>
+    <button class="btn btn-success" id="btn-pay" onclick="showPayment()" style="display:none;">💳 Ir a Pagar</button>
+  </div>
+</div>
+
+{# ── Error global ─────────────────────────────────────── #}
+<div id="sale-error" class="alert alert-error" style="display:none; margin-bottom:1rem;"></div>
+
+{# ── Search bar ───────────────────────────────────────── #}
+<div style="display:flex; gap:0.75rem; margin-bottom:1.25rem; align-items:flex-end;">
+  <div style="flex:1;">
+    <label style="display:block; font-size:0.78rem; font-weight:600; color:var(--gray-3); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:0.4rem;">
+      Código o nombre del producto
+    </label>
+    <input type="text" id="product-search"
+      placeholder="Escribe el código o nombre y presiona Enter..."
+      autocomplete="off"
+      onkeydown="if(event.key==='Enter') searchProduct()"
+      style="width:100%; padding:0.65rem 1rem; background:var(--dark-2); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:0.95rem; font-family:inherit; color:var(--white); outline:none; transition:border-color 0.2s, box-shadow 0.2s;"
+      onfocus="this.style.borderColor='var(--purple-500)'; this.style.boxShadow='0 0 0 3px rgba(124,58,237,0.2)'"
+      onblur="this.style.borderColor='var(--border)'; this.style.boxShadow='none'">
+  </div>
+  <button class="btn btn-primary" onclick="searchProduct()" style="padding:0.65rem 1.4rem; font-size:0.95rem; white-space:nowrap;">
+    ＋ Agregar
+  </button>
+</div>
+
+{# ── Main grid: items (left) + sidebar (right) ────────── #}
+<div style="display:grid; grid-template-columns:1fr 360px; gap:1.5rem; align-items:start;">
+
+  {# ── Items table ──────────────────────────────────────── #}
+  <div style="background:var(--dark-2); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow);">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:1rem 1.5rem; border-bottom:1px solid var(--border); background:var(--dark-3);">
+      <span style="font-size:0.78rem; font-weight:700; color:var(--purple-300); text-transform:uppercase; letter-spacing:1px;">📋 Ítems de la Venta</span>
+      <span id="items-count" class="stat-chip" style="font-size:0.75rem;">0 productos</span>
+    </div>
+    <div style="overflow-y:auto; max-height:calc(100vh - 260px);">
+      <table style="margin:0; border-radius:0; border:none; box-shadow:none;">
+        <thead style="position:sticky; top:0; z-index:1;">
+          <tr>
+            <th style="width:38%; padding:1rem 1.25rem;">Producto</th>
+            <th style="width:16%; padding:1rem 1.25rem;">Precio Unit.</th>
+            <th style="width:18%; padding:1rem 1.25rem;">Cantidad</th>
+            <th style="width:18%; padding:1rem 1.25rem;">Subtotal</th>
+            <th style="width:10%; text-align:center; padding:1rem 1.25rem;">Acción</th>
+          </tr>
+        </thead>
+        <tbody id="items-body">
+          <tr>
+            <td colspan="5" class="empty-state" style="padding:5rem 1rem;">
+              <div style="font-size:3rem; margin-bottom:0.75rem;">🛒</div>
+              <div style="font-size:1rem; font-weight:500; color:var(--text-muted);">Inicia una venta y agrega productos</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Right sidebar ────────────────────────────────────── #}
+  <div style="display:flex; flex-direction:column; gap:1rem; position:sticky; top:80px;">
+
+    {# Resumen #}
+    <div class="card" style="margin:0;">
+      <h2 style="margin-bottom:1.25rem;">💰 Resumen</h2>
+      <div style="display:flex; justify-content:space-between; padding:0.65rem 0; border-bottom:1px solid var(--border);">
+        <span style="color:var(--text-muted); font-size:0.9rem;">Productos</span>
+        <span id="items-count-side" style="font-weight:700; color:var(--white); font-size:0.9rem;">0</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:0.65rem 0; border-bottom:1px solid var(--border);">
+        <span style="color:var(--text-muted); font-size:0.9rem;">Subtotal</span>
+        <span style="font-weight:700; color:var(--white); font-size:0.9rem;">$<span id="sale-subtotal">0.00</span></span>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:1rem 0 0.25rem;">
+        <span style="font-size:1rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">TOTAL</span>
+        <span style="font-size:2.2rem; font-weight:900; color:var(--purple-300); letter-spacing:-2px; line-height:1;">$<span id="sale-total">0.00</span></span>
+      </div>
+    </div>
+
+    {# Payment form #}
+    <div class="card" id="payment-section" style="margin:0; display:none;">
+      <h2 style="margin-bottom:1.25rem;">💳 Pago</h2>
+      <div id="payment-error" class="alert alert-error" style="display:none; margin-bottom:0.75rem;"></div>
+      <div class="form-group">
+        <label for="payment-method">Método de pago</label>
+        <select id="payment-method">
+          <option value="CASH">💵 Efectivo</option>
+          <option value="CREDIT_CARD">💳 Tarjeta de Crédito</option>
+          <option value="DEBIT_CARD">🏦 Tarjeta de Débito</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="payment-amount">Monto recibido ($)</label>
+        <input type="number" id="payment-amount" min="0" step="0.01" placeholder="0.00" oninput="calcChange()">
+      </div>
+      <div id="change-display" style="display:none; margin-bottom:0.75rem;">
+        <div class="change-box" style="width:100%; text-align:center; font-size:1.1rem; padding:0.85rem;">
+          ✅ Cambio: $<span id="change-amount">0.00</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:0.5rem;">
+        <button class="btn btn-success" onclick="processPay()" style="flex:1; justify-content:center; padding:0.65rem;">✓ Confirmar Pago</button>
+        <button class="btn btn-secondary" onclick="cancelPayment()" style="padding:0.65rem 0.85rem;">✕</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  var currentSaleId = null;
+  var saleItems = [];
+
+  function showError(msg) {
+    var el = document.getElementById('sale-error');
+    el.innerHTML = '⚠️ ' + msg;
+    el.style.display = 'flex';
+  }
+  function clearError() {
+    document.getElementById('sale-error').style.display = 'none';
+  }
+
+  async function startSale() {
+    clearError();
+    try {
+      var res = await fetch('/sale/start', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      var data = await res.json();
+      if (!res.ok) { showError(data.error || 'Error al iniciar la venta.'); return; }
+      currentSaleId = data.id;
+      saleItems = data.items || [];
+      document.getElementById('btn-start').innerHTML = '🔄 Reiniciar';
+      document.getElementById('btn-pay').style.display = 'inline-flex';
+      document.getElementById('sale-status-chip').style.display = 'inline-flex';
+      document.getElementById('product-search').focus();
+      renderItems();
+    } catch (e) { showError('Error al iniciar la venta.'); }
+  }
+
+  async function searchProduct() {
+    if (!currentSaleId) { showError('Primero inicia una venta.'); return; }
+    var query = document.getElementById('product-search').value.trim();
+    if (!query) return;
+    clearError();
+    try {
+      var res = await fetch('/sale/' + currentSaleId + '/item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: query, quantity: 1 })
+      });
+      var data = await res.json();
+      if (!res.ok) { showError(data.error || 'Error al agregar producto.'); return; }
+      saleItems = data.items || [];
+      renderItems();
+      document.getElementById('product-search').value = '';
+      document.getElementById('product-search').focus();
+    } catch (e) { showError('Error al agregar producto.'); }
+  }
+
+  function renderItems() {
+    var tbody = document.getElementById('items-body');
+    var n = saleItems ? saleItems.length : 0;
+    document.getElementById('items-count').textContent = n + ' producto' + (n !== 1 ? 's' : '');
+    document.getElementById('items-count-side').textContent = n;
+
+    if (!saleItems || n === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state" style="padding:3.5rem 1rem;"><div style="font-size:2rem;margin-bottom:0.5rem;">🛒</div>Sin ítems en la venta</td></tr>';
+      document.getElementById('sale-total').textContent = '0.00';
+      document.getElementById('sale-subtotal').textContent = '0.00';
+      return;
+    }
+
+    tbody.innerHTML = saleItems.map(function(item, idx) {
+      var subtotal = parseFloat(item.subtotal || (parseFloat(item.price || 0) * parseInt(item.quantity || 1)));
+      return '<tr>' +
+        '<td style="font-weight:500;">' + (item.productName || item.productId) + '</td>' +
+        '<td style="color:var(--purple-300);font-weight:600;">$' + parseFloat(item.price || 0).toFixed(2) + '</td>' +
+        '<td>' +
+          '<input type="number" min="1" value="' + item.quantity + '" ' +
+          'style="width:72px;padding:0.35rem 0.5rem;background:var(--dark-3);border:1px solid var(--gray-1);border-radius:6px;color:var(--white);font-family:inherit;font-size:0.9rem;" ' +
+          'onchange="updateQty(' + idx + ', this.value)">' +
+        '</td>' +
+        '<td id="subtotal-' + idx + '" style="font-weight:600;">$' + subtotal.toFixed(2) + '</td>' +
+        '<td style="text-align:center;">' +
+          '<button class="btn btn-danger" style="padding:0.3rem 0.65rem;font-size:0.8rem;" onclick="removeItem(' + idx + ')">✕</button>' +
+        '</td>' +
+        '</tr>';
+    }).join('');
+    recalcTotal();
+  }
+
+  function updateQty(idx, val) {
+    var qty = parseInt(val) || 1;
+    saleItems[idx].quantity = qty;
+    saleItems[idx].subtotal = parseFloat(saleItems[idx].price || 0) * qty;
+    document.getElementById('subtotal-' + idx).textContent = '$' + saleItems[idx].subtotal.toFixed(2);
+    recalcTotal();
+  }
+
+  function removeItem(idx) {
+    saleItems.splice(idx, 1);
+    renderItems();
+  }
+
+  function recalcTotal() {
+    var total = saleItems.reduce(function(sum, item) { return sum + parseFloat(item.subtotal || 0); }, 0);
+    document.getElementById('sale-total').textContent = total.toFixed(2);
+    document.getElementById('sale-subtotal').textContent = total.toFixed(2);
+  }
+
+  function showPayment() {
+    if (!currentSaleId || saleItems.length === 0) { showError('Agrega productos antes de pagar.'); return; }
+    document.getElementById('payment-section').style.display = 'block';
+    document.getElementById('payment-amount').focus();
+  }
+
+  function calcChange() {
+    var total = parseFloat(document.getElementById('sale-total').textContent) || 0;
+    var amount = parseFloat(document.getElementById('payment-amount').value) || 0;
+    var box = document.getElementById('change-display');
+    if (amount > 0) {
+      box.style.display = 'block';
+      document.getElementById('change-amount').textContent = Math.max(0, amount - total).toFixed(2);
+    } else {
+      box.style.display = 'none';
+    }
+  }
+
+  async function processPay() {
+    var method = document.getElementById('payment-method').value;
+    var amount = parseFloat(document.getElementById('payment-amount').value);
+    var total = parseFloat(document.getElementById('sale-total').textContent);
+    var errEl = document.getElementById('payment-error');
+    errEl.style.display = 'none';
+    if (!amount || amount <= 0) { errEl.innerHTML = '⚠️ Ingresa un monto válido.'; errEl.style.display = 'flex'; return; }
+    if (amount < total) { errEl.innerHTML = '⚠️ Monto insuficiente. Total: $' + total.toFixed(2); errEl.style.display = 'flex'; return; }
+    try {
+      var res = await fetch('/sale/' + currentSaleId + '/pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: method, amount: amount })
+      });
+      var data = await res.json();
+      if (!res.ok) { errEl.innerHTML = '⚠️ ' + (data.error || 'Error al procesar el pago.'); errEl.style.display = 'flex'; return; }
+      var change = (data.change !== undefined) ? data.change : (amount - total);
+      alert('✅ Pago exitoso!\nCambio: $' + parseFloat(change).toFixed(2));
+      resetSale();
+    } catch (e) { errEl.innerHTML = '⚠️ Error al procesar el pago.'; errEl.style.display = 'flex'; }
+  }
+
+  function cancelPayment() {
+    document.getElementById('payment-section').style.display = 'none';
+  }
+
+  function resetSale() {
+    currentSaleId = null;
+    saleItems = [];
+    renderItems();
+    document.getElementById('payment-section').style.display = 'none';
+    document.getElementById('btn-pay').style.display = 'none';
+    document.getElementById('btn-start').innerHTML = '＋ Nueva Venta';
+    document.getElementById('sale-status-chip').style.display = 'none';
+    document.getElementById('payment-amount').value = '';
+    document.getElementById('change-display').style.display = 'none';
+    clearError();
+  }
+</script>
+{% endblock %}

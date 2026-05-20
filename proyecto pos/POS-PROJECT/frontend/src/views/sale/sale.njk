@@ -1,0 +1,396 @@
+{% extends "layout.njk" %}
+
+{% block content %}
+
+<div style="display:flex; flex-direction:column; height:calc(100vh - 2rem); background:var(--dark-2); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow);">
+
+  {# Header #}
+  <div style="flex-shrink:0; display:flex; justify-content:space-between; align-items:center; padding:0.85rem 1.25rem; border-bottom:1px solid var(--border); background:var(--dark-3);">
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+      <div style="width:28px; height:28px; background:linear-gradient(135deg,var(--purple-600),var(--purple-400)); border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:0.9rem;">&#127860;</div>
+      <span style="font-weight:700; font-size:0.95rem; color:var(--white);">Supermercado <span style="color:var(--purple-300);">El Tenedor</span></span>
+      <span id="sale-status-chip" style="display:none;" class="stat-chip">Activa</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+      <span id="items-count" class="stat-chip">0 productos</span>
+      <button class="btn btn-success" id="btn-pay" onclick="showPaymentModal()" style="padding:0.4rem 1rem; font-size:0.82rem; display:none;">Pagar</button>
+    </div>
+  </div>
+
+  {# Barra de busqueda #}
+  <div style="flex-shrink:0; padding:0.75rem 1.25rem; border-bottom:1px solid var(--border); background:var(--dark-2);">
+    <div id="sale-error" class="alert alert-error" style="display:none; margin-bottom:0.6rem; padding:0.5rem 0.85rem; font-size:0.82rem;"></div>
+    <div style="display:flex; gap:0.6rem; align-items:center;">
+      <div style="flex:1; position:relative;">
+        <input type="text" id="product-search"
+          placeholder="Codigo, nombre... o 2*leche para agregar 2 unidades"
+          autocomplete="off"
+          oninput="onSearchInput()"
+          onkeydown="onSearchKeydown(event)"
+          style="width:100%; padding:0.6rem 1rem; background:var(--dark-3); border:1px solid var(--gray-1); border-radius:var(--radius-sm); font-size:0.92rem; font-family:inherit; color:var(--white); outline:none; transition:border-color 0.2s, box-shadow 0.2s;"
+          onfocus="this.style.borderColor='var(--purple-500)'; this.style.boxShadow='0 0 0 3px rgba(124,58,237,0.18)'"
+          onblur="this.style.borderColor='var(--gray-1)'; this.style.boxShadow='none'">
+        <div id="search-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:200; background:var(--dark-3); border:1px solid var(--purple-500); border-radius:var(--radius-sm); box-shadow:var(--shadow); max-height:240px; overflow-y:auto; margin-top:2px;"></div>
+      </div>
+      <button class="btn btn-primary" id="btn-start" onclick="startSale()" style="padding:0.6rem 1.2rem; font-size:0.88rem; white-space:nowrap;">
+        + Nueva Venta
+      </button>
+    </div>
+  </div>
+
+  {# Tabla de items #}
+  <div style="flex:1; overflow-y:auto;">
+    <table style="margin:0; border-radius:0; border:none; box-shadow:none;">
+      <thead style="position:sticky; top:0; z-index:1; background:var(--dark-3);">
+        <tr>
+          <th style="width:40%; padding:0.7rem 1.25rem;">Producto</th>
+          <th style="width:15%; padding:0.7rem 1rem;">Precio</th>
+          <th style="width:18%; padding:0.7rem 1rem;">Cantidad</th>
+          <th style="width:17%; padding:0.7rem 1rem;">Subtotal</th>
+          <th style="width:10%; text-align:center; padding:0.7rem 1rem;">Accion</th>
+        </tr>
+      </thead>
+      <tbody id="items-body">
+        <tr>
+          <td colspan="5" class="empty-state" style="padding:4rem 1rem;">
+            <div style="font-size:2.5rem; margin-bottom:0.6rem;">&#128722;</div>
+            <div>Inicia una venta y agrega productos</div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  {# Footer totales #}
+  <div style="flex-shrink:0; border-top:1px solid var(--border); background:var(--dark-3); padding:0.85rem 1.25rem; display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+    <div style="display:flex; gap:2rem; align-items:center;">
+      <div>
+        <div style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.15rem;">Productos</div>
+        <div id="footer-count" style="font-weight:700; color:var(--white); font-size:1rem;">0</div>
+      </div>
+      <div>
+        <div style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.15rem;">Subtotal</div>
+        <div style="font-weight:700; color:var(--white); font-size:1rem;">$<span id="sale-subtotal">0.00</span></div>
+      </div>
+      <div>
+        <div style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.15rem;">TOTAL</div>
+        <div style="font-weight:900; color:var(--purple-300); font-size:1.6rem; letter-spacing:-1px; line-height:1;">$<span id="sale-total">0.00</span></div>
+      </div>
+    </div>
+    <button class="btn btn-success" id="btn-pay-footer" onclick="showPaymentModal()" style="padding:0.7rem 2rem; font-size:1rem; display:none;">
+      Ir a Pagar
+    </button>
+  </div>
+
+</div>
+
+{# Modal de Pago #}
+<div class="modal-overlay" id="payment-modal">
+  <div class="modal" style="max-width:420px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
+      <h2 style="margin:0; font-size:1.1rem; color:var(--white);">Confirmar Pago</h2>
+      <button onclick="closePaymentModal()" style="background:none;border:none;color:var(--gray-3);cursor:pointer;font-size:1.2rem;padding:0.2rem;">X</button>
+    </div>
+    <div id="payment-error" class="alert alert-error" style="display:none; margin-bottom:0.75rem;"></div>
+    <div style="background:var(--dark-3); border-radius:var(--radius-sm); padding:0.85rem 1rem; margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center;">
+      <span style="color:var(--text-muted); font-size:0.9rem;">Total a pagar</span>
+      <span style="font-size:1.5rem; font-weight:900; color:var(--purple-300);">$<span id="modal-total">0.00</span></span>
+    </div>
+    <div class="form-group">
+      <label for="payment-method">Metodo de pago</label>
+      <select id="payment-method">
+        <option value="CASH">Efectivo</option>
+        <option value="CREDIT_CARD">Tarjeta de Credito</option>
+        <option value="DEBIT_CARD">Tarjeta de Debito</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="payment-amount">Monto recibido ($)</label>
+      <input type="number" id="payment-amount" min="0" step="0.01" placeholder="0.00" oninput="calcChange()">
+    </div>
+    <div id="change-display" style="display:none; margin-bottom:1rem;">
+      <div class="change-box" style="width:100%; text-align:center; font-size:1.1rem; padding:0.75rem;">
+        Cambio: $<span id="change-amount">0.00</span>
+      </div>
+    </div>
+    <div style="display:flex; gap:0.6rem; margin-top:0.5rem;">
+      <button class="btn btn-success" onclick="processPay()" style="flex:1; justify-content:center; padding:0.7rem; font-size:0.95rem;">Confirmar Pago</button>
+      <button class="btn btn-secondary" onclick="closePaymentModal()" style="padding:0.7rem 1rem;">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var currentSaleId = null;
+  var saleItems = [];
+  var selectedProductId = null;
+  var highlightedIndex = -1;
+  var searchTimeout = null;
+
+  window.addEventListener('load', function() {
+    document.getElementById('product-search').focus();
+  });
+
+  function showError(msg) {
+    var el = document.getElementById('sale-error');
+    el.textContent = msg;
+    el.style.display = 'flex';
+    setTimeout(function() { el.style.display = 'none'; }, 4000);
+  }
+
+  // Parsea "2*leche" -> { quantity: 2, query: "leche" }
+  // Parsea "leche"   -> { quantity: 1, query: "leche" }
+  function parseInput(raw) {
+    var m = raw.match(/^(\d+)\*(.*)$/);
+    if (m) return { quantity: parseInt(m[1], 10) || 1, query: m[2].trim() };
+    return { quantity: 1, query: raw.trim() };
+  }
+
+  // Muestra el dropdown siempre con la parte del query (ignora el prefijo N*)
+  window.onSearchInput = function() {
+    var raw = document.getElementById('product-search').value;
+    var parsed = parseInput(raw);
+    selectedProductId = null;
+    clearTimeout(searchTimeout);
+    if (!parsed.query) { closeDropdown(); return; }
+    searchTimeout = setTimeout(function() { fetchSuggestions(parsed.query); }, 180);
+  };
+
+  async function fetchSuggestions(query) {
+    try {
+      var res = await fetch('/sale/search-products?q=' + encodeURIComponent(query));
+      if (!res.ok) { closeDropdown(); return; }
+      renderDropdown(await res.json());
+    } catch(e) { closeDropdown(); }
+  }
+
+  function renderDropdown(products) {
+    var dd = document.getElementById('search-dropdown');
+    highlightedIndex = -1;
+    if (!products || !products.length) { closeDropdown(); return; }
+    var html = '';
+    for (var i = 0; i < products.length; i++) {
+      var p = products[i];
+      var noStock = p.outOfStock || p.stockLevel === 0;
+      html += '<div class="dd-item" data-id="' + p.id + '" data-name="' + p.name.replace(/"/g,'&quot;') + '" data-idx="' + i + '"'
+        + ' onmouseenter="window.ddHighlight(' + i + ')" onclick="window.ddSelect(this)"'
+        + ' style="display:flex;justify-content:space-between;align-items:center;padding:0.55rem 1rem;cursor:pointer;opacity:' + (noStock?'0.45':'1') + ';border-bottom:1px solid rgba(255,255,255,0.04);">'
+        + '<div><span style="font-weight:500;color:var(--white);font-size:0.88rem;">' + p.name + '</span>'
+        + '<span style="font-size:0.75rem;color:var(--gray-3);margin-left:0.4rem;">(' + p.code + ')</span></div>'
+        + '<div style="display:flex;gap:0.5rem;align-items:center;">'
+        + '<span style="color:var(--purple-300);font-weight:600;font-size:0.88rem;">$' + parseFloat(p.price).toFixed(2) + '</span>'
+        + '<span style="font-size:0.7rem;color:' + (noStock?'var(--danger)':'var(--text-muted)') + ';">' + (noStock?'Sin stock':p.stockLevel+' uds.') + '</span>'
+        + '</div></div>';
+    }
+    dd.innerHTML = html;
+    dd.style.display = 'block';
+  }
+
+  window.ddHighlight = function(idx) {
+    highlightedIndex = idx;
+    document.querySelectorAll('.dd-item').forEach(function(el, i) {
+      el.style.background = i === idx ? 'rgba(124,58,237,0.2)' : '';
+    });
+  };
+
+  // Al seleccionar del dropdown: preserva el prefijo N* si existe
+  window.ddSelect = function(el) {
+    var id = el.getAttribute('data-id');
+    var name = el.getAttribute('data-name');
+    if (!id) return;
+    selectedProductId = id;
+    var raw = document.getElementById('product-search').value;
+    var m = raw.match(/^(\d+)\*/);
+    document.getElementById('product-search').value = m ? m[0] + name : name;
+    closeDropdown();
+  };
+
+  function closeDropdown() {
+    var dd = document.getElementById('search-dropdown');
+    if (dd) dd.style.display = 'none';
+    highlightedIndex = -1;
+  }
+
+  window.onSearchKeydown = function(e) {
+    var items = document.querySelectorAll('.dd-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      highlightedIndex = Math.min(highlightedIndex + 1, items.length - 1);
+      window.ddHighlight(highlightedIndex);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      highlightedIndex = Math.max(highlightedIndex - 1, 0);
+      window.ddHighlight(highlightedIndex);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && items[highlightedIndex]) {
+        window.ddSelect(items[highlightedIndex]);
+      }
+      addProduct();
+    } else if (e.key === 'Escape') {
+      closeDropdown();
+    }
+  };
+
+  document.addEventListener('click', function(e) {
+    var input = document.getElementById('product-search');
+    var dd = document.getElementById('search-dropdown');
+    if (input && dd && !input.contains(e.target) && !dd.contains(e.target)) closeDropdown();
+  });
+
+  async function addProduct() {
+    if (!currentSaleId) { showError('Primero haz clic en "Nueva Venta".'); return; }
+    var raw = document.getElementById('product-search').value.trim();
+    if (!raw) return;
+
+    var parsed = parseInput(raw);
+    var productRef = selectedProductId || parsed.query;
+    var qty = parsed.quantity;
+
+    // Limpiar y devolver foco de inmediato (lector de barras)
+    document.getElementById('product-search').value = '';
+    selectedProductId = null;
+    closeDropdown();
+    document.getElementById('product-search').focus();
+
+    try {
+      var res = await fetch('/sale/' + currentSaleId + '/item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_id: productRef, quantity: qty })
+      });
+      var data = await res.json();
+      if (!res.ok) { showError(data.error || 'Producto no encontrado.'); return; }
+      saleItems = data.items || [];
+      renderItems();
+    } catch(e) { showError('Error de conexion.'); }
+  }
+
+  window.startSale = async function() {
+    try {
+      var res = await fetch('/sale/start', { method:'POST', headers:{'Content-Type':'application/json'} });
+      var data = await res.json();
+      if (!res.ok) { showError(data.error || 'Error al iniciar.'); return; }
+      currentSaleId = data.id;
+      saleItems = data.items || [];
+      document.getElementById('btn-start').textContent = 'Reiniciar';
+      document.getElementById('btn-pay').style.display = 'inline-flex';
+      document.getElementById('btn-pay-footer').style.display = 'inline-flex';
+      document.getElementById('sale-status-chip').style.display = 'inline-flex';
+      document.getElementById('product-search').focus();
+      renderItems();
+    } catch(e) { showError('Error al iniciar. Verifica el backend.'); }
+  };
+
+  function renderItems() {
+    var tbody = document.getElementById('items-body');
+    var n = saleItems ? saleItems.length : 0;
+    document.getElementById('items-count').textContent = n + ' producto' + (n !== 1 ? 's' : '');
+    document.getElementById('footer-count').textContent = n;
+
+    if (!n) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state" style="padding:4rem 1rem;"><div style="font-size:2.5rem;margin-bottom:0.6rem;">&#128722;</div><div>Sin items en la venta</div></td></tr>';
+      document.getElementById('sale-total').textContent = '0.00';
+      document.getElementById('sale-subtotal').textContent = '0.00';
+      return;
+    }
+
+    var rows = '';
+    for (var i = 0; i < saleItems.length; i++) {
+      var item = saleItems[i];
+      var price = parseFloat(item.unitPrice || item.price || 0);
+      var sub = parseFloat(item.subtotal || (price * parseInt(item.quantity || 1)));
+      rows += '<tr>'
+        + '<td style="font-weight:500;font-size:0.88rem;">' + (item.productName || item.productId) + '</td>'
+        + '<td style="color:var(--purple-300);font-weight:600;font-size:0.88rem;">$' + price.toFixed(2) + '</td>'
+        + '<td><input type="number" min="1" value="' + item.quantity + '" style="width:64px;padding:0.28rem 0.4rem;background:var(--dark-3);border:1px solid var(--gray-1);border-radius:5px;color:var(--white);font-family:inherit;font-size:0.85rem;" onchange="window.updateQty(' + i + ',this.value)"></td>'
+        + '<td id="sub-' + i + '" style="font-weight:600;font-size:0.88rem;">$' + sub.toFixed(2) + '</td>'
+        + '<td style="text-align:center;"><button class="btn btn-danger" style="padding:0.25rem 0.55rem;font-size:0.75rem;" onclick="window.removeItem(' + i + ')">X</button></td>'
+        + '</tr>';
+    }
+    tbody.innerHTML = rows;
+    recalcTotal();
+  }
+
+  window.updateQty = function(idx, val) {
+    var qty = parseInt(val) || 1;
+    saleItems[idx].quantity = qty;
+    var price = parseFloat(saleItems[idx].unitPrice || saleItems[idx].price || 0);
+    saleItems[idx].subtotal = price * qty;
+    document.getElementById('sub-' + idx).textContent = '$' + saleItems[idx].subtotal.toFixed(2);
+    recalcTotal();
+  };
+
+  window.removeItem = function(idx) {
+    saleItems.splice(idx, 1);
+    renderItems();
+  };
+
+  function recalcTotal() {
+    var total = saleItems.reduce(function(s, item) { return s + parseFloat(item.subtotal || 0); }, 0);
+    document.getElementById('sale-total').textContent = total.toFixed(2);
+    document.getElementById('sale-subtotal').textContent = total.toFixed(2);
+  }
+
+  window.showPaymentModal = function() {
+    if (!currentSaleId || !saleItems.length) { showError('Agrega productos antes de pagar.'); return; }
+    document.getElementById('modal-total').textContent = document.getElementById('sale-total').textContent;
+    document.getElementById('payment-amount').value = '';
+    document.getElementById('change-display').style.display = 'none';
+    document.getElementById('payment-error').style.display = 'none';
+    document.getElementById('payment-modal').classList.add('open');
+    setTimeout(function() { document.getElementById('payment-amount').focus(); }, 100);
+  };
+
+  window.closePaymentModal = function() {
+    document.getElementById('payment-modal').classList.remove('open');
+    document.getElementById('product-search').focus();
+  };
+
+  window.calcChange = function() {
+    var total = parseFloat(document.getElementById('modal-total').textContent) || 0;
+    var amount = parseFloat(document.getElementById('payment-amount').value) || 0;
+    var box = document.getElementById('change-display');
+    box.style.display = amount > 0 ? 'block' : 'none';
+    if (amount > 0) document.getElementById('change-amount').textContent = Math.max(0, amount - total).toFixed(2);
+  };
+
+  window.processPay = async function() {
+    var method = document.getElementById('payment-method').value;
+    var amount = parseFloat(document.getElementById('payment-amount').value);
+    var total = parseFloat(document.getElementById('modal-total').textContent);
+    var errEl = document.getElementById('payment-error');
+    errEl.style.display = 'none';
+    if (!amount || amount <= 0) { errEl.textContent = 'Ingresa un monto valido.'; errEl.style.display = 'flex'; return; }
+    if (amount < total) { errEl.textContent = 'Monto insuficiente. Total: $' + total.toFixed(2); errEl.style.display = 'flex'; return; }
+    try {
+      var res = await fetch('/sale/' + currentSaleId + '/pay', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ method: method, amount: amount })
+      });
+      var data = await res.json();
+      if (!res.ok) { errEl.textContent = data.error || 'Error al procesar.'; errEl.style.display = 'flex'; return; }
+      var change = data.change !== undefined ? data.change : (amount - total);
+      window.closePaymentModal();
+      alert('Pago exitoso! Cambio: $' + parseFloat(change).toFixed(2));
+      resetSale();
+    } catch(e) { errEl.textContent = 'Error al procesar.'; errEl.style.display = 'flex'; }
+  };
+
+  function resetSale() {
+    currentSaleId = null; saleItems = []; selectedProductId = null;
+    renderItems();
+    document.getElementById('btn-pay').style.display = 'none';
+    document.getElementById('btn-pay-footer').style.display = 'none';
+    document.getElementById('btn-start').textContent = '+ Nueva Venta';
+    document.getElementById('sale-status-chip').style.display = 'none';
+    document.getElementById('product-search').focus();
+  }
+
+  document.getElementById('payment-modal').addEventListener('click', function(e) {
+    if (e.target === this) window.closePaymentModal();
+  });
+})();
+</script>
+{% endblock %}

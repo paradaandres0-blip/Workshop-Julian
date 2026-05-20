@@ -1,0 +1,175 @@
+{% extends "layout.njk" %}
+
+{% block content %}
+<h1>📦 Inventario de Productos</h1>
+
+{% if error %}
+  <div class="alert alert-error">⚠️ {{ error }}</div>
+{% endif %}
+
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+  <div style="display:flex; gap:0.5rem; align-items:center;">
+    {% if products %}
+      <span class="stat-chip">{{ products.length }} productos</span>
+    {% endif %}
+  </div>
+  <button class="btn btn-primary" onclick="openModal(null)">＋ Nuevo Producto</button>
+</div>
+
+<div class="card" style="padding:0; overflow:hidden;">
+  <table>
+    <thead>
+      <tr>
+        <th>Código</th>
+        <th>Nombre</th>
+        <th>Precio</th>
+        <th>Stock</th>
+        <th>Estado</th>
+        <th style="text-align:right;">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if products and products.length > 0 %}
+        {% for product in products %}
+          <tr class="{% if product.outOfStock %}out-of-stock{% elif product.lowStock %}low-stock{% endif %}">
+            <td><code style="background:var(--dark-3);padding:0.15rem 0.4rem;border-radius:4px;font-size:0.82rem;color:var(--purple-300);">{{ product.code }}</code></td>
+            <td style="font-weight:500;">{{ product.name }}</td>
+            <td style="color:var(--purple-300); font-weight:600;">${{ product.price }}</td>
+            <td>
+              <span style="font-weight:600;">{{ product.stockLevel }}</span>
+              <span style="color:var(--text-muted); font-size:0.8rem;"> uds.</span>
+            </td>
+            <td>
+              {% if product.outOfStock %}
+                <span class="badge badge-danger">⛔ Sin stock</span>
+              {% elif product.lowStock %}
+                <span class="badge badge-warning">⚠️ Stock bajo</span>
+              {% else %}
+                <span class="badge badge-ok">✓ OK</span>
+              {% endif %}
+            </td>
+            <td style="text-align:right;">
+              <div style="display:flex; gap:0.4rem; justify-content:flex-end;">
+                <button class="btn btn-secondary" style="padding:0.35rem 0.75rem; font-size:0.82rem;" onclick="openModal({{ product | dump }})">✏️ Editar</button>
+                <button class="btn btn-danger" style="padding:0.35rem 0.75rem; font-size:0.82rem;" onclick="deleteProduct('{{ product.id }}', '{{ product.name }}')">🗑️</button>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="6" class="empty-state">
+            No hay productos registrados. Crea el primero con el botón de arriba.
+          </td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal crear/editar -->
+<div class="modal-overlay" id="product-modal">
+  <div class="modal">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
+      <h2 id="modal-title" style="margin:0;">Nuevo Producto</h2>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--gray-3);cursor:pointer;font-size:1.2rem;padding:0.2rem;">✕</button>
+    </div>
+    <form id="product-form" onsubmit="submitProduct(event)">
+      <input type="hidden" id="product-id">
+      <div class="form-group">
+        <label for="field-code">Código *</label>
+        <input type="text" id="field-code" required placeholder="Ej: PROD-001">
+      </div>
+      <div class="form-group">
+        <label for="field-name">Nombre *</label>
+        <input type="text" id="field-name" required placeholder="Ej: Café Americano">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="field-price">Precio ($) *</label>
+          <input type="number" id="field-price" required min="0.01" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label for="field-stock">Stock *</label>
+          <input type="number" id="field-stock" required min="0" step="1" placeholder="0">
+        </div>
+      </div>
+      <div id="modal-error" class="alert alert-error" style="display:none;"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn-primary">💾 Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function openModal(product) {
+    document.getElementById('modal-error').style.display = 'none';
+    if (product) {
+      document.getElementById('modal-title').textContent = 'Editar Producto';
+      document.getElementById('product-id').value = product.id || '';
+      document.getElementById('field-code').value = product.code || '';
+      document.getElementById('field-name').value = product.name || '';
+      document.getElementById('field-price').value = product.price || '';
+      document.getElementById('field-stock').value = product.stockLevel !== undefined ? product.stockLevel : 0;
+    } else {
+      document.getElementById('modal-title').textContent = 'Nuevo Producto';
+      document.getElementById('product-form').reset();
+      document.getElementById('product-id').value = '';
+    }
+    document.getElementById('product-modal').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('product-modal').classList.remove('open');
+  }
+
+  async function submitProduct(e) {
+    e.preventDefault();
+    var id = document.getElementById('product-id').value;
+    var price = parseFloat(document.getElementById('field-price').value);
+    var stock = parseInt(document.getElementById('field-stock').value);
+    var errEl = document.getElementById('modal-error');
+    errEl.style.display = 'none';
+    if (price <= 0) { errEl.innerHTML = '⚠️ El precio debe ser mayor a 0.'; errEl.style.display = 'flex'; return; }
+    if (stock < 0) { errEl.innerHTML = '⚠️ El stock no puede ser negativo.'; errEl.style.display = 'flex'; return; }
+    var body = {
+      code: document.getElementById('field-code').value.trim(),
+      name: document.getElementById('field-name').value.trim(),
+      price: price,
+      stockLevel: stock
+    };
+    try {
+      var url = id ? '/inventory/' + id : '/inventory';
+      var method = id ? 'PUT' : 'POST';
+      var res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      var data = await res.json();
+      if (!res.ok) {
+        errEl.innerHTML = '⚠️ ' + (res.status === 409 ? 'El código de producto ya existe.' : (data.error || 'Error al guardar.'));
+        errEl.style.display = 'flex';
+        return;
+      }
+      closeModal();
+      location.reload();
+    } catch (e) { errEl.innerHTML = '⚠️ Error de conexión.'; errEl.style.display = 'flex'; }
+  }
+
+  async function deleteProduct(id, name) {
+    if (!confirm('¿Eliminar "' + name + '"?\nEsta acción no se puede deshacer.')) return;
+    try {
+      var res = await fetch('/inventory/' + id, { method: 'DELETE' });
+      if (!res.ok) {
+        var data = await res.json();
+        alert('Error: ' + (data.error || 'No se pudo eliminar.'));
+        return;
+      }
+      location.reload();
+    } catch (e) { alert('Error de conexión.'); }
+  }
+
+  document.getElementById('product-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+</script>
+{% endblock %}
