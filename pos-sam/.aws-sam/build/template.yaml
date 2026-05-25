@@ -1,0 +1,215 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: POS AWS Infrastructure - Serverless API with Lambda and DynamoDB
+Globals:
+  Function:
+    Runtime: java21
+    Architectures:
+    - x86_64
+    MemorySize: 512
+    Timeout: 30
+Resources:
+  ProductosTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+  VentasTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+  GetProductsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: GetProductsDynamoDBPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:PutItem
+            - dynamodb:DeleteItem
+            Resource:
+              Fn::GetAtt:
+              - ProductosTable
+              - Arn
+  SaveSaleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: SaveSaleDynamoDBPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:PutItem
+            - dynamodb:DeleteItem
+            Resource:
+            - Fn::GetAtt:
+              - VentasTable
+              - Arn
+            - Fn::GetAtt:
+              - ProductosTable
+              - Arn
+  GetProductsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: GetProductsFunction
+      Handler: com.pos.lambda.GetProductsHandler::handleRequest
+      Role:
+        Fn::GetAtt:
+        - GetProductsRole
+        - Arn
+      Environment:
+        Variables:
+          PRODUCTOS_TABLE:
+            Ref: ProductosTable
+      Events:
+        GetAllProducts:
+          Type: Api
+          Properties:
+            Path: /api/v1/products
+            Method: get
+        SearchProducts:
+          Type: Api
+          Properties:
+            Path: /api/v1/products/search
+            Method: get
+        GetProductById:
+          Type: Api
+          Properties:
+            Path: /api/v1/products/{id}
+            Method: get
+        CreateProduct:
+          Type: Api
+          Properties:
+            Path: /api/v1/products
+            Method: post
+        UpdateProduct:
+          Type: Api
+          Properties:
+            Path: /api/v1/products/{id}
+            Method: put
+        DeleteProduct:
+          Type: Api
+          Properties:
+            Path: /api/v1/products/{id}
+            Method: delete
+    Metadata:
+      SamResourceId: GetProductsFunction
+  SaveSaleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: SaveSaleFunction
+      Handler: com.pos.lambda.SaveSaleHandler::handleRequest
+      Role:
+        Fn::GetAtt:
+        - SaveSaleRole
+        - Arn
+      Environment:
+        Variables:
+          VENTAS_TABLE:
+            Ref: VentasTable
+          PRODUCTOS_TABLE:
+            Ref: ProductosTable
+      Events:
+        CreateSale:
+          Type: Api
+          Properties:
+            Path: /api/v1/sales
+            Method: post
+        GetSale:
+          Type: Api
+          Properties:
+            Path: /api/v1/sales/{id}
+            Method: get
+        AddItem:
+          Type: Api
+          Properties:
+            Path: /api/v1/sales/{id}/items
+            Method: post
+        ConfirmSale:
+          Type: Api
+          Properties:
+            Path: /api/v1/sales/{id}/confirm
+            Method: post
+        ProcessPayment:
+          Type: Api
+          Properties:
+            Path: /api/v1/payments
+            Method: post
+        SalesReport:
+          Type: Api
+          Properties:
+            Path: /api/v1/reports/sales
+            Method: get
+        TopProducts:
+          Type: Api
+          Properties:
+            Path: /api/v1/reports/top-products
+            Method: get
+        InventoryReport:
+          Type: Api
+          Properties:
+            Path: /api/v1/reports/inventory
+            Method: get
+    Metadata:
+      SamResourceId: SaveSaleFunction
+Outputs:
+  ApiUrl:
+    Description: Base URL of the API Gateway
+    Value:
+      Fn::Sub: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/
+  GetProductsEndpoint:
+    Description: Full URL for GET /api/v1/products endpoint
+    Value:
+      Fn::Sub: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/api/v1/products
+  SaveSaleEndpoint:
+    Description: Full URL for POST /api/v1/sales endpoint
+    Value:
+      Fn::Sub: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/api/v1/sales
+  ProductosTableName:
+    Description: Name of the Productos DynamoDB table
+    Value:
+      Ref: ProductosTable
+  VentasTableName:
+    Description: Name of the Ventas DynamoDB table
+    Value:
+      Ref: VentasTable
