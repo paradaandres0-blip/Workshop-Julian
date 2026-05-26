@@ -214,6 +214,7 @@
   var selectedProductId = null;
   var highlightedIndex  = -1;
   var searchTimeout     = null;
+  var selectedRowIndex  = -1;  // fila seleccionada en la tabla de items
 
   window.addEventListener('load', function() {
     renderTabs();
@@ -416,6 +417,68 @@
     }
   };
 
+  /* ── Selección de fila con ↑ ↓ y cantidad con + / - ─────────────────── */
+
+  function highlightRow(idx) {
+    var s = activeSale();
+    if (!s || !s.items) return;
+    var rows = document.querySelectorAll('#items-body tr');
+    rows.forEach(function(r, i) {
+      r.style.background = i === idx ? 'rgba(124,58,237,0.18)' : '';
+      r.style.outline    = i === idx ? '1px solid var(--purple-500)' : '';
+    });
+    selectedRowIndex = idx;
+  }
+
+  document.addEventListener('keydown', function(e) {
+    var tag = document.activeElement ? document.activeElement.tagName : '';
+    var isSearchFocused = document.activeElement === document.getElementById('product-search');
+    var isBodyFocused   = tag === 'BODY' || tag === '' || isSearchFocused;
+    if (!isBodyFocused) return;
+
+    var s = activeSale();
+    if (!s || !s.items || !s.items.length) return;
+    var n = s.items.length;
+
+    // ↓ → baja una fila
+    if (e.key === 'ArrowDown' && !document.getElementById('search-dropdown').style.display.includes('block')) {
+      e.preventDefault();
+      var next = selectedRowIndex < n - 1 ? selectedRowIndex + 1 : 0;
+      highlightRow(next);
+      return;
+    }
+
+    // ↑ → sube una fila
+    if (e.key === 'ArrowUp' && !document.getElementById('search-dropdown').style.display.includes('block')) {
+      e.preventDefault();
+      var prev = selectedRowIndex > 0 ? selectedRowIndex - 1 : n - 1;
+      highlightRow(prev);
+      return;
+    }
+
+    // + → sube cantidad de la fila seleccionada (o última si ninguna)
+    if (e.key === '+' || e.key === '=') {
+      e.preventDefault();
+      var idx = selectedRowIndex >= 0 && selectedRowIndex < n ? selectedRowIndex : n - 1;
+      window.updateQty(idx, (s.items[idx].quantity || 1) + 1);
+      renderItems();
+      highlightRow(idx);
+      return;
+    }
+
+    // - → baja cantidad de la fila seleccionada (mínimo 1)
+    if (e.key === '-' || e.key === '_') {
+      e.preventDefault();
+      var idx = selectedRowIndex >= 0 && selectedRowIndex < n ? selectedRowIndex : n - 1;
+      var newQty = (s.items[idx].quantity || 1) - 1;
+      if (newQty < 1) newQty = 1;
+      window.updateQty(idx, newQty);
+      renderItems();
+      highlightRow(idx);
+      return;
+    }
+  });
+
   document.addEventListener('click', function(e) {
     var input = document.getElementById('product-search');
     var dd    = document.getElementById('search-dropdown');
@@ -493,9 +556,13 @@
       rows += '<tr>'
         + '<td style="font-weight:500;font-size:0.88rem;">' + (item.productName || item.productId) + '</td>'
         + '<td style="color:var(--purple-300);font-weight:600;font-size:0.88rem;">$' + price.toFixed(2) + '</td>'
-        + '<td><input type="number" min="1" value="' + item.quantity + '"'
-        + ' style="width:64px;padding:0.28rem 0.4rem;background:var(--dark-3);border:1px solid var(--gray-1);border-radius:5px;color:var(--white);font-family:inherit;font-size:0.85rem;"'
-        + ' onchange="window.updateQty(' + i + ',this.value)"></td>'
+        + '<td><div style="display:flex;align-items:center;gap:0.25rem;">'
+        + '<button onclick="window.updateQty(' + i + ', ' + (item.quantity - 1) + ')" style="width:26px;height:26px;background:var(--dark-3);border:1px solid var(--gray-1);border-radius:4px;color:var(--white);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;" tabindex="-1">&#8722;</button>'
+        + '<input type="number" min="1" value="' + item.quantity + '" id="qty-' + i + '"'
+        + ' style="width:44px;padding:0.28rem 0.3rem;background:var(--dark-3);border:1px solid var(--gray-1);border-radius:5px;color:var(--white);font-family:inherit;font-size:0.85rem;text-align:center;"'
+        + ' onchange="window.updateQty(' + i + ',this.value)">'
+        + '<button onclick="window.updateQty(' + i + ', ' + (item.quantity + 1) + ')" style="width:26px;height:26px;background:var(--dark-3);border:1px solid var(--gray-1);border-radius:4px;color:var(--white);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;" tabindex="-1">&#43;</button>'
+        + '</div></td>'
         + '<td id="sub-' + i + '" style="font-weight:600;font-size:0.88rem;">$' + sub.toFixed(2) + '</td>'
         + '<td style="text-align:center;"><button class="btn btn-danger" style="padding:0.25rem 0.55rem;font-size:0.75rem;" onclick="window.removeItem(' + i + ')">X</button></td>'
         + '</tr>';

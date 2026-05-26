@@ -264,8 +264,14 @@ public class GetProductsHandler implements RequestHandler<APIGatewayProxyRequest
 
     private double getN(Map<String, AttributeValue> item, String key) {
         AttributeValue av = item.get(key);
-        if (av != null && av.getN() != null) {
-            try { return Double.parseDouble(av.getN()); } catch (Exception ignored) {}
+        if (av != null) {
+            if (av.getN() != null) {
+                try { return Double.parseDouble(av.getN()); } catch (Exception ignored) {}
+            }
+            // fallback: stored as string
+            if (av.getS() != null) {
+                try { return Double.parseDouble(av.getS()); } catch (Exception ignored) {}
+            }
         }
         return 0;
     }
