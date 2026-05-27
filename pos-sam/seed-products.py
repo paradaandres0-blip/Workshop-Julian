@@ -2,74 +2,89 @@ import boto3
 import uuid
 from decimal import Decimal
 
-TABLE = "pos-sam-ProductosTable-1KAR20ZY6LGTK"
+TABLE  = "pos-sam-ProductosTable-1KAR20ZY6LGTK"
 REGION = "us-east-1"
 
+# code (6 digits), name, price (integer), stock, low_threshold
 products = [
-    ("7702001001", "Coca-Cola 600ml",          1.50, 120, 10),
-    ("7702001002", "Pepsi 600ml",              1.50, 100, 10),
-    ("7702001003", "Agua Cristal 500ml",       0.80, 200, 20),
-    ("7702001004", "Jugo Hit Naranja 300ml",   1.20,  80, 10),
-    ("7702001005", "Gatorade Azul 500ml",      2.00,  60,  8),
-    ("7702001006", "Red Bull 250ml",           3.50,  40,  5),
-    ("7702001007", "Leche Entera 1L",          1.80,  90, 15),
-    ("7702001008", "Leche Descremada 1L",      1.90,  70, 10),
-    ("7702001009", "Yogur Natural 200g",       1.10,  50,  8),
-    ("7702001010", "Queso Mozzarella 250g",    3.20,  35,  5),
-    ("7702001011", "Pan Tajado Bimbo",         2.50,  45,  8),
-    ("7702001012", "Pan Integral 500g",        2.80,  30,  5),
-    ("7702001013", "Galletas Oreo 154g",       1.90,  60, 10),
-    ("7702001014", "Galletas Saltinas 200g",   1.50,  55, 10),
-    ("7702001015", "Cereal Zucaritas 500g",    4.50,  25,  5),
-    ("7702001016", "Avena Quaker 500g",        3.00,  40,  8),
-    ("7702001017", "Arroz Diana 1kg",          2.20, 100, 20),
-    ("7702001018", "Frijoles Negros 500g",     1.80,  80, 15),
-    ("7702001019", "Lentejas 500g",            1.60,  60, 10),
-    ("7702001020", "Pasta Espagueti 500g",     1.40,  90, 15),
-    ("7702001021", "Salsa de Tomate 400g",     1.70,  70, 10),
-    ("7702001022", "Mayonesa Fruco 400g",      2.30,  50,  8),
-    ("7702001023", "Aceite Girasol 1L",        3.50,  45,  8),
-    ("7702001024", "Azucar Blanca 1kg",        1.90,  80, 15),
-    ("7702001025", "Sal Refisal 500g",         0.90, 100, 20),
-    ("7702001026", "Cafe Colcafe 200g",        5.50,  30,  5),
-    ("7702001027", "Te Lipton 25 sobres",      2.80,  40,  8),
-    ("7702001028", "Chocolate Jet 150g",       2.20,  55, 10),
-    ("7702001029", "Mantequilla Rama 250g",    2.90,  35,  5),
-    ("7702001030", "Huevos x12",               3.80,  60, 10),
-    ("7702001031", "Jabon Dove 90g",           1.80,  70, 10),
-    ("7702001032", "Shampoo Head Shoulders",   5.90,  25,  5),
-    ("7702001033", "Papel Higienico x4",       3.20,  80, 15),
-    ("7702001034", "Detergente Ariel 500g",    4.50,  40,  8),
-    ("7702001035", "Suavizante Downy 500ml",   3.80,  30,  5),
-    ("7702001036", "Desodorante Axe 150ml",    4.20,  35,  5),
-    ("7702001037", "Crema Dental Colgate",     2.50,  60, 10),
-    ("7702001038", "Cepillo Dental Oral-B",    3.00,  45,  8),
-    ("7702001039", "Panales Huggies x20",     12.00,  20,  5),
-    ("7702001040", "Toallas Nosotras x10",     3.50,  30,  5),
-    ("7702001041", "Manzana Roja kg",          2.00,  50, 10),
-    ("7702001042", "Banano kg",                0.80,  80, 15),
-    ("7702001043", "Tomate kg",                1.50,  60, 10),
-    ("7702001044", "Cebolla kg",               1.20,  70, 10),
-    ("7702001045", "Papa kg",                  1.00, 100, 20),
-    ("7702001046", "Zanahoria kg",             1.10,  60, 10),
-    ("7702001047", "Pollo Entero kg",          4.50,  30,  5),
-    ("7702001048", "Carne Molida 500g",        5.50,  25,  5),
-    ("7702001049", "Atun Van Camps 170g",      2.10,  80, 15),
-    ("7702001050", "Sardinas Deli 125g",       1.80,  70, 10),
+    ("100001", "Coca-Cola 600ml",          1500, 120, 10),
+    ("100002", "Pepsi 600ml",              1500, 100, 10),
+    ("100003", "Agua Cristal 500ml",        800, 200, 20),
+    ("100004", "Jugo Hit Naranja 300ml",   1200,  80, 10),
+    ("100005", "Gatorade Azul 500ml",      2000,  60,  8),
+    ("100006", "Red Bull 250ml",           3500,  40,  5),
+    ("100007", "Leche Entera 1L",          1800,  90, 15),
+    ("100008", "Leche Descremada 1L",      1900,  70, 10),
+    ("100009", "Yogur Natural 200g",       1100,  50,  8),
+    ("100010", "Queso Mozzarella 250g",    3200,  35,  5),
+    ("100011", "Pan Tajado Bimbo",         2500,  45,  8),
+    ("100012", "Pan Integral 500g",        2800,  30,  5),
+    ("100013", "Galletas Oreo 154g",       1900,  60, 10),
+    ("100014", "Galletas Saltinas 200g",   1500,  55, 10),
+    ("100015", "Cereal Zucaritas 500g",    4500,  25,  5),
+    ("100016", "Avena Quaker 500g",        3000,  40,  8),
+    ("100017", "Arroz Diana 1kg",          2200, 100, 20),
+    ("100018", "Frijoles Negros 500g",     1800,  80, 15),
+    ("100019", "Lentejas 500g",            1600,  60, 10),
+    ("100020", "Pasta Espagueti 500g",     1400,  90, 15),
+    ("100021", "Salsa de Tomate 400g",     1700,  70, 10),
+    ("100022", "Mayonesa Fruco 400g",      2300,  50,  8),
+    ("100023", "Aceite Girasol 1L",        3500,  45,  8),
+    ("100024", "Azucar Blanca 1kg",        1900,  80, 15),
+    ("100025", "Sal Refisal 500g",          900, 100, 20),
+    ("100026", "Cafe Colcafe 200g",        5500,  30,  5),
+    ("100027", "Te Lipton 25 sobres",      2800,  40,  8),
+    ("100028", "Chocolate Jet 150g",       2200,  55, 10),
+    ("100029", "Mantequilla Rama 250g",    2900,  35,  5),
+    ("100030", "Huevos x12",               3800,  60, 10),
+    ("100031", "Jabon Dove 90g",           1800,  70, 10),
+    ("100032", "Shampoo Head Shoulders",   5900,  25,  5),
+    ("100033", "Papel Higienico x4",       3200,  80, 15),
+    ("100034", "Detergente Ariel 500g",    4500,  40,  8),
+    ("100035", "Suavizante Downy 500ml",   3800,  30,  5),
+    ("100036", "Desodorante Axe 150ml",    4200,  35,  5),
+    ("100037", "Crema Dental Colgate",     2500,  60, 10),
+    ("100038", "Cepillo Dental Oral-B",    3000,  45,  8),
+    ("100039", "Panales Huggies x20",     12000,  20,  5),
+    ("100040", "Toallas Nosotras x10",     3500,  30,  5),
+    ("100041", "Manzana Roja kg",          2000,  50, 10),
+    ("100042", "Banano kg",                 800,  80, 15),
+    ("100043", "Tomate kg",                1500,  60, 10),
+    ("100044", "Cebolla kg",               1200,  70, 10),
+    ("100045", "Papa kg",                  1000, 100, 20),
+    ("100046", "Zanahoria kg",             1100,  60, 10),
+    ("100047", "Pollo Entero kg",          4500,  30,  5),
+    ("100048", "Carne Molida 500g",        5500,  25,  5),
+    ("100049", "Atun Van Camps 170g",      2100,  80, 15),
+    ("100050", "Sardinas Deli 125g",       1800,  70, 10),
 ]
 
 dynamodb = boto3.resource("dynamodb", region_name=REGION)
-table = dynamodb.Table(TABLE)
+table    = dynamodb.Table(TABLE)
 
+# Delete all existing items
+print("Limpiando tabla...")
+resp  = table.scan()
+items = resp["Items"]
+while "LastEvaluatedKey" in resp:
+    resp   = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"])
+    items += resp["Items"]
+for item in items:
+    table.delete_item(Key={"id": item["id"]})
+print(f"Eliminados {len(items)} items anteriores.")
+
+# Insert with structure: { id, code, producto: { name, price, stock_level, low_stock_threshold } }
 for i, (code, name, price, stock, low) in enumerate(products, 1):
     table.put_item(Item={
-        "id": str(uuid.uuid4()),
+        "id":   str(uuid.uuid4()),
         "code": code,
-        "name": name,
-        "price": Decimal(str(price)),
-        "stock_level": stock,
-        "low_stock_threshold": low,
+        "producto": {
+            "name":                name,
+            "price":               Decimal(price),
+            "stock_level":         stock,
+            "low_stock_threshold": low,
+        }
     })
-    print(f"[{i}/50] {name}")
+    print(f"[{i}/50] {code} - {name} - ${price}")
 
 print(f"\nDone! 50 productos insertados en {TABLE}")
