@@ -1,5 +1,6 @@
 import boto3
 import uuid
+import json
 from decimal import Decimal
 
 TABLE  = "pos-sam-ProductosTable-1KAR20ZY6LGTK"
@@ -73,17 +74,19 @@ for item in items:
     table.delete_item(Key={"id": item["id"]})
 print(f"Eliminados {len(items)} items anteriores.")
 
-# Insert with structure: { id, code, producto: { name, price, stock_level, low_stock_threshold } }
+# Insert with structure: { id, code, producto: "<JSON string>" }
+# producto is stored as a plain JSON string so the AWS console shows it as readable JSON.
 for i, (code, name, price, stock, low) in enumerate(products, 1):
+    producto_json = json.dumps({
+        "name":                name,
+        "price":               price,
+        "stock_level":         stock,
+        "low_stock_threshold": low,
+    })
     table.put_item(Item={
-        "id":   str(uuid.uuid4()),
-        "code": code,
-        "producto": {
-            "name":                name,
-            "price":               Decimal(price),
-            "stock_level":         stock,
-            "low_stock_threshold": low,
-        }
+        "id":       str(uuid.uuid4()),
+        "code":     code,
+        "producto": producto_json,
     })
     print(f"[{i}/50] {code} - {name} - ${price}")
 

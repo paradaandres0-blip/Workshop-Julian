@@ -13,21 +13,13 @@ import java.time.Instant;
 import java.util.*;
 
 /**
- * Estructura DynamoDB Ventas:
+ * Estructura DynamoDB Ventas — columna "detalle" guardada como JSON string plano:
  * {
- *   "id": "uuid",          ← Partition Key
- *   "detalle": {
- *     "status": "PAID",
- *     "total": 6.20,
- *     "createdAt": "...",
- *     "paymentMethod": "CASH",
- *     "amountPaid": 10.00,
- *     "change": 3.80,
- *     "items": [
- *       { "productId": "...", "productName": "...", "unitPrice": 2.20, "quantity": 1, "subtotal": 2.20 }
- *     ]
- *   }
+ *   "id": "uuid",
+ *   "detalle": "{\"status\":\"PAID\",\"total\":6.20,\"createdAt\":\"...\",\"paymentMethod\":\"CASH\",\"amountPaid\":10.00,\"change\":3.80,\"items\":[...]}"
  * }
+ *
+ * Esto hace que la consola de AWS muestre el JSON legible directamente en la columna "detalle".
  */
 public class SaveSaleHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
@@ -92,19 +84,24 @@ public class SaveSaleHandler implements RequestHandler<APIGatewayProxyRequestEve
         String saleId    = UUID.randomUUID().toString();
         String createdAt = Instant.now().toString();
 
-        // Build detalle map
-        Map<String, AttributeValue> detalleMap = new HashMap<>();
-        detalleMap.put("status",    new AttributeValue("OPEN"));
-        detalleMap.put("createdAt", new AttributeValue(createdAt));
-        detalleMap.put("total",     new AttributeValue().withN("0"));
-        detalleMap.put("items",     new AttributeValue().withL(new ArrayList<>()));
+        Map<String, Object> detalle = new LinkedHashMap<>();
+        detalle.put("status",    "OPEN");
+        detalle.put("createdAt", createdAt);
+        detalle.put("total",     0);
+        detalle.put("items",     new ArrayList<>());
 
         Map<String, AttributeValue> item = new HashMap<>();
         item.put("id",      new AttributeValue(saleId));
-        item.put("detalle", new AttributeValue().withM(detalleMap));
+        item.put("detalle", new AttributeValue(objectMapper.writeValueAsString(detalle)));
 
         dynamoClient.putItem(new PutItemRequest().withTableName(ventasTable).withItem(item));
-        return response(201, objectMapper.writeValueAsString(toSale(item)));
+
+        Map<String, Object> saleResponse = new LinkedHashMap<>();
+        saleResponse.put("id",     saleId);
+        saleResponse.put("status", "OPEN");
+        saleResponse.put("total",  0);
+        saleResponse.put("items",  new ArrayList<>());
+        return response(201, objectMapper.writeValueAsString(saleResponse));
     }
 
     // ── Get sale ──────────────────────────────────────────────────────────────
@@ -121,6 +118,7 @@ public class SaveSaleHandler implements RequestHandler<APIGatewayProxyRequestEve
 
     // ── Add item ──────────────────────────────────────────────────────────────
 
+    @SuppressWarnings("unchecked")
     private APIGatewayProxyResponseEvent handleAddItem(String saleId, APIGatewayProxyRequestEvent input, Context context) throws Exception {
         GetItemResult saleResult = dynamoClient.getItem(new GetItemRequest()
                 .withTableName(ventasTable)
@@ -132,7 +130,6 @@ public class SaveSaleHandler implements RequestHandler<APIGatewayProxyRequestEve
         String body = input.getBody();
         if (body == null || body.isBlank()) return response(400, "{\"error\":\"Body requerido\"}");
 
-        @SuppressWarnings("unchecked")
         Map<String, Object> req = objectMapper.readValue(body, Map.class);
         String productRef = str(req.get("product_id"));
         int quantity      = toInt(req.get("quantity"));
@@ -147,85 +144,86 @@ public class SaveSaleHandler implements RequestHandler<APIGatewayProxyRequestEve
         double price    = toDouble(product.get("price"));
         double subtotal = price * quantity;
 
-        Map<String, AttributeValue> itemMap = new HashMap<>();
-        itemMap.put("productId",   new AttributeValue(str(product.get("id"))));
-        itemMap.put("productName", new AttributeValue(str(product.get("name"))));
-        itemMap.put("unitPrice",   new AttributeValue().withN(String.valueOf(price)));
-        itemMap.put("quantity",    new AttributeValue().withN(String.valueOf(quantity)));
-        itemMap.put("subtotal",    new AttributeValue().withN(String.valueOf(subtotal)));
+        // Read existing detalle
+        Map<String, Object> detalle = readDetalle(saleResult.getItem());
+        List<Map<String, Object>> items = (List<Map<String, Object>>) detalle.getOrDefault("items", new ArrayList<>());
 
-        // Get detalle map
-        Map<String, AttributeValue> saleItem = saleResult.getItem();
-        Map<String, AttributeValue> detalleMap = saleItem.containsKey("detalle") && saleItem.get("detalle").getM() != null
-                ? new HashMap<>(saleItem.get("detalle").getM())
-                : new HashMap<>();
-
-        List<AttributeValue> existingItems = detalleMap.containsKey("items") && detalleMap.get("items").getL() != null
-                ? new ArrayList<>(detalleMap.get("items").getL())
-                : new ArrayList<>();
-
-        // Check if product already in sale
+        // Check if product already in sale — update quantity
         boolean found = false;
-        for (AttributeValue av : existingItems) {
-            Map<String, AttributeValue> m = av.getM();
-            if (m != null && str(m.get("productId") != null ? m.get("productId").getS() : null).equals(str(product.get("id")))) {
-                int newQty = toInt(m.get("quantity") != null ? m.get("quantity").getN() : "0") + quantity;
-                m.put("quantity", new AttributeValue().withN(String.valueOf(newQty)));
-                m.put("subtotal", new AttributeValue().withN(String.valueOf(price * newQty)));
+        for (Map<String, Object> it : items) {
+            if (str(it.get("productId")).equals(str(product.get("id")))) {
+                int newQty = toInt(it.get("quantity")) + quantity;
+                it.put("quantity", newQty);
+                it.put("subtotal", price * newQty);
                 found = true;
                 break;
             }
         }
-        if (!found) existingItems.add(new AttributeValue().withM(itemMap));
-
-        // Recalc total
-        double total = 0;
-        for (AttributeValue av : existingItems) {
-            Map<String, AttributeValue> m = av.getM();
-            if (m != null && m.get("subtotal") != null) total += toDouble(m.get("subtotal").getN());
+        if (!found) {
+            Map<String, Object> newItem = new LinkedHashMap<>();
+            newItem.put("productId",   str(product.get("id")));
+            newItem.put("productName", str(product.get("name")));
+            newItem.put("unitPrice",   price);
+            newItem.put("quantity",    quantity);
+            newItem.put("subtotal",    subtotal);
+            items.add(newItem);
         }
 
-        detalleMap.put("items", new AttributeValue().withL(existingItems));
-        detalleMap.put("total", new AttributeValue().withN(String.valueOf(total)));
+        // Recalc total
+        double total = items.stream().mapToDouble(it -> toDouble(it.get("subtotal"))).sum();
+        detalle.put("items", items);
+        detalle.put("total", total);
 
-        Map<String, AttributeValue> updatedSale = new HashMap<>(saleItem);
-        updatedSale.put("detalle", new AttributeValue().withM(detalleMap));
+        // Save back as JSON string
+        Map<String, AttributeValue> updatedSale = new HashMap<>();
+        updatedSale.put("id",      new AttributeValue(saleId));
+        updatedSale.put("detalle", new AttributeValue(objectMapper.writeValueAsString(detalle)));
         dynamoClient.putItem(new PutItemRequest().withTableName(ventasTable).withItem(updatedSale));
 
-        return response(200, objectMapper.writeValueAsString(toSale(updatedSale)));
+        Map<String, Object> saleResponse = new LinkedHashMap<>();
+        saleResponse.put("id",     saleId);
+        saleResponse.put("status", detalle.get("status"));
+        saleResponse.put("total",  total);
+        saleResponse.put("items",  items);
+        return response(200, objectMapper.writeValueAsString(saleResponse));
     }
 
     // ── Confirm sale ──────────────────────────────────────────────────────────
 
+    @SuppressWarnings("unchecked")
     private APIGatewayProxyResponseEvent handleConfirm(String saleId, Context context) throws Exception {
         GetItemResult r = dynamoClient.getItem(new GetItemRequest()
                 .withTableName(ventasTable)
                 .withKey(Map.of("id", new AttributeValue(saleId))));
         if (r.getItem() == null || r.getItem().isEmpty()) return response(404, "{\"error\":\"Venta no encontrada\"}");
 
-        Map<String, AttributeValue> saleItem = r.getItem();
-        Map<String, AttributeValue> detalleMap = saleItem.containsKey("detalle") && saleItem.get("detalle").getM() != null
-                ? new HashMap<>(saleItem.get("detalle").getM()) : new HashMap<>();
-        detalleMap.put("status", new AttributeValue("CONFIRMED"));
+        Map<String, Object> detalle = readDetalle(r.getItem());
+        detalle.put("status", "CONFIRMED");
 
-        Map<String, AttributeValue> updatedSale = new HashMap<>(saleItem);
-        updatedSale.put("detalle", new AttributeValue().withM(detalleMap));
+        Map<String, AttributeValue> updatedSale = new HashMap<>();
+        updatedSale.put("id",      new AttributeValue(saleId));
+        updatedSale.put("detalle", new AttributeValue(objectMapper.writeValueAsString(detalle)));
         dynamoClient.putItem(new PutItemRequest().withTableName(ventasTable).withItem(updatedSale));
 
-        return response(200, objectMapper.writeValueAsString(toSale(updatedSale)));
+        Map<String, Object> saleResponse = new LinkedHashMap<>();
+        saleResponse.put("id",     saleId);
+        saleResponse.put("status", "CONFIRMED");
+        saleResponse.put("total",  detalle.get("total"));
+        saleResponse.put("items",  detalle.getOrDefault("items", new ArrayList<>()));
+        return response(200, objectMapper.writeValueAsString(saleResponse));
     }
 
     // ── Payment ───────────────────────────────────────────────────────────────
 
+    @SuppressWarnings("unchecked")
     private APIGatewayProxyResponseEvent handlePayment(APIGatewayProxyRequestEvent input, Context context) throws Exception {
         String body = input.getBody();
         if (body == null || body.isBlank()) return response(400, "{\"error\":\"Body requerido\"}");
 
-        @SuppressWarnings("unchecked")
         Map<String, Object> req = objectMapper.readValue(body, Map.class);
-        String saleId  = str(req.get("sale_id"));
-        String method  = str(req.get("method"));
-        double amount  = toDouble(req.get("amount"));
+        String saleId = str(req.get("sale_id"));
+        String method = str(req.get("method"));
+        double amount = toDouble(req.get("amount"));
 
         if (saleId == null || saleId.isBlank()) return response(400, "{\"error\":\"sale_id es requerido\"}");
 
@@ -234,115 +232,103 @@ public class SaveSaleHandler implements RequestHandler<APIGatewayProxyRequestEve
                 .withKey(Map.of("id", new AttributeValue(saleId))));
         if (saleResult.getItem() == null || saleResult.getItem().isEmpty()) return response(404, "{\"error\":\"Venta no encontrada\"}");
 
-        Map<String, AttributeValue> saleItem = saleResult.getItem();
-        Map<String, AttributeValue> detalleMap = saleItem.containsKey("detalle") && saleItem.get("detalle").getM() != null
-                ? new HashMap<>(saleItem.get("detalle").getM()) : new HashMap<>();
-
-        double total = detalleMap.containsKey("total") && detalleMap.get("total").getN() != null
-                ? toDouble(detalleMap.get("total").getN()) : 0;
+        Map<String, Object> detalle = readDetalle(saleResult.getItem());
+        double total = toDouble(detalle.get("total"));
 
         if (amount < total) return response(422, "{\"error_code\":\"INVALID_PAYMENT\",\"message\":\"Monto insuficiente\"}");
 
-        detalleMap.put("status",        new AttributeValue("PAID"));
-        detalleMap.put("paymentMethod", new AttributeValue(method != null ? method : "CASH"));
-        detalleMap.put("amountPaid",    new AttributeValue().withN(String.valueOf(amount)));
-        detalleMap.put("change",        new AttributeValue().withN(String.valueOf(amount - total)));
+        detalle.put("status",        "PAID");
+        detalle.put("paymentMethod", method != null && !method.isBlank() ? method : "CASH");
+        detalle.put("amountPaid",    amount);
+        detalle.put("change",        amount - total);
 
-        Map<String, AttributeValue> updatedSale = new HashMap<>(saleItem);
-        updatedSale.put("detalle", new AttributeValue().withM(detalleMap));
+        Map<String, AttributeValue> updatedSale = new HashMap<>();
+        updatedSale.put("id",      new AttributeValue(saleId));
+        updatedSale.put("detalle", new AttributeValue(objectMapper.writeValueAsString(detalle)));
         dynamoClient.putItem(new PutItemRequest().withTableName(ventasTable).withItem(updatedSale));
 
-        // Decrease stock
-        List<AttributeValue> items = detalleMap.containsKey("items") && detalleMap.get("items").getL() != null
-                ? detalleMap.get("items").getL() : new ArrayList<>();
-        for (AttributeValue av : items) {
-            Map<String, AttributeValue> m = av.getM();
-            if (m == null) continue;
-            String productId = m.get("productId") != null ? m.get("productId").getS() : null;
-            int qty = (int) toDouble(m.get("quantity") != null ? m.get("quantity").getN() : "0");
-            if (productId != null && qty > 0) decreaseStock(productId, qty);
+        // Decrease stock for each item
+        List<Map<String, Object>> items = (List<Map<String, Object>>) detalle.getOrDefault("items", new ArrayList<>());
+        for (Map<String, Object> it : items) {
+            String productId = str(it.get("productId"));
+            int qty          = toInt(it.get("quantity"));
+            if (!productId.isBlank() && qty > 0) decreaseStock(productId, qty);
         }
 
         String paymentId = UUID.randomUUID().toString();
-        Map<String, Object> paymentResponse = new HashMap<>();
+        Map<String, Object> paymentResponse = new LinkedHashMap<>();
         paymentResponse.put("id",     paymentId);
         paymentResponse.put("saleId", saleId);
         paymentResponse.put("method", method);
         paymentResponse.put("amount", amount);
         paymentResponse.put("change", amount - total);
         paymentResponse.put("status", "COMPLETED");
-
         return response(201, objectMapper.writeValueAsString(paymentResponse));
     }
 
     // ── Reports ───────────────────────────────────────────────────────────────
 
+    @SuppressWarnings("unchecked")
     private APIGatewayProxyResponseEvent handleSalesReport(APIGatewayProxyRequestEvent input, Context context) throws Exception {
         Map<String, String> qp = input.getQueryStringParameters();
         String from = qp != null ? qp.get("from") : null;
         String to   = qp != null ? qp.get("to")   : null;
 
-        ScanResult result = dynamoClient.scan(new ScanRequest().withTableName(ventasTable)
-                .withFilterExpression("detalle.#s = :paid")
-                .withExpressionAttributeNames(Map.of("#s", "status"))
-                .withExpressionAttributeValues(Map.of(":paid", new AttributeValue("PAID"))));
+        ScanResult result = dynamoClient.scan(new ScanRequest().withTableName(ventasTable));
 
         double totalAmount = 0;
         int totalSales = 0;
-        Map<String, Double> byMethod = new HashMap<>();
+        Map<String, Double> byMethod = new LinkedHashMap<>();
         byMethod.put("CASH", 0.0); byMethod.put("CREDIT_CARD", 0.0); byMethod.put("DEBIT_CARD", 0.0);
 
         for (Map<String, AttributeValue> item : result.getItems()) {
-            Map<String, AttributeValue> d = getDetalleMap(item);
-            String createdAt = getS(d, "createdAt");
-            if (from != null && to != null && !createdAt.isEmpty()) {
+            Map<String, Object> d = readDetalle(item);
+            if (!"PAID".equals(d.get("status"))) continue;
+            String createdAt = str(d.get("createdAt"));
+            if (from != null && to != null && createdAt.length() >= 10) {
                 String date = createdAt.substring(0, 10);
                 if (date.compareTo(from) < 0 || date.compareTo(to) > 0) continue;
             }
             totalSales++;
-            double amt = getN(d, "total");
+            double amt = toDouble(d.get("total"));
             totalAmount += amt;
-            String pm = getS(d, "paymentMethod");
-            if (pm.isEmpty()) pm = "CASH";
+            String pm = str(d.get("paymentMethod"));
+            if (pm.isBlank()) pm = "CASH";
             byMethod.put(pm, byMethod.getOrDefault(pm, 0.0) + amt);
         }
 
-        Map<String, Object> report = new HashMap<>();
+        Map<String, Object> report = new LinkedHashMap<>();
         report.put("totalSales",  totalSales);
         report.put("totalAmount", String.format("%.2f", totalAmount));
         report.put("byMethod",    byMethod);
         return response(200, objectMapper.writeValueAsString(report));
     }
 
+    @SuppressWarnings("unchecked")
     private APIGatewayProxyResponseEvent handleTopProducts(APIGatewayProxyRequestEvent input, Context context) throws Exception {
         Map<String, String> qp = input.getQueryStringParameters();
         String from = qp != null ? qp.get("from") : null;
         String to   = qp != null ? qp.get("to")   : null;
 
-        ScanResult result = dynamoClient.scan(new ScanRequest().withTableName(ventasTable)
-                .withFilterExpression("detalle.#s = :paid")
-                .withExpressionAttributeNames(Map.of("#s", "status"))
-                .withExpressionAttributeValues(Map.of(":paid", new AttributeValue("PAID"))));
+        ScanResult result = dynamoClient.scan(new ScanRequest().withTableName(ventasTable));
 
         Map<String, Map<String, Object>> productTotals = new HashMap<>();
         for (Map<String, AttributeValue> sale : result.getItems()) {
-            Map<String, AttributeValue> d = getDetalleMap(sale);
-            String createdAt = getS(d, "createdAt");
-            if (from != null && to != null && !createdAt.isEmpty()) {
+            Map<String, Object> d = readDetalle(sale);
+            if (!"PAID".equals(d.get("status"))) continue;
+            String createdAt = str(d.get("createdAt"));
+            if (from != null && to != null && createdAt.length() >= 10) {
                 String date = createdAt.substring(0, 10);
                 if (date.compareTo(from) < 0 || date.compareTo(to) > 0) continue;
             }
-            List<AttributeValue> items = d.containsKey("items") && d.get("items").getL() != null
-                    ? d.get("items").getL() : new ArrayList<>();
-            for (AttributeValue av : items) {
-                Map<String, AttributeValue> m = av.getM();
-                if (m == null) continue;
-                String pid   = m.get("productId")   != null ? m.get("productId").getS()   : "";
-                String pname = m.get("productName") != null ? m.get("productName").getS() : "";
-                int qty      = (int) toDouble(m.get("quantity") != null ? m.get("quantity").getN() : "0");
-                if (pid.isEmpty()) continue;
+            List<Map<String, Object>> items = (List<Map<String, Object>>) d.getOrDefault("items", new ArrayList<>());
+            for (Map<String, Object> it : items) {
+                String pid   = str(it.get("productId"));
+                String pname = str(it.get("productName"));
+                int qty      = toInt(it.get("quantity"));
+                if (pid.isBlank()) continue;
                 Map<String, Object> entry = productTotals.computeIfAbsent(pid, k -> {
-                    Map<String, Object> e = new HashMap<>();
+                    Map<String, Object> e = new LinkedHashMap<>();
                     e.put("productCode", pid); e.put("productName", pname); e.put("totalQuantity", 0);
                     return e;
                 });
@@ -367,9 +353,84 @@ public class SaveSaleHandler implements RequestHandler<APIGatewayProxyRequestEve
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private Map<String, AttributeValue> getDetalleMap(Map<String, AttributeValue> item) {
-        return item.containsKey("detalle") && item.get("detalle").getM() != null
-                ? item.get("detalle").getM() : new HashMap<>();
+    /**
+     * Reads the "detalle" column from a DynamoDB item.
+     * Supports two storage formats:
+     *   1. JSON string (new format): detalle stored as a plain JSON string → parse directly.
+     *   2. Native DynamoDB Map (legacy): detalle stored as AttributeValue Map → convert to plain map.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readDetalle(Map<String, AttributeValue> item) {
+        AttributeValue av = item.get("detalle");
+        if (av == null) return new LinkedHashMap<>();
+
+        // Format 1: JSON string (preferred — shows as plain JSON in AWS console)
+        if (av.getS() != null) {
+            try {
+                return objectMapper.readValue(av.getS(), Map.class);
+            } catch (Exception ignored) {}
+        }
+
+        // Format 2: native DynamoDB Map (legacy records)
+        if (av.getM() != null) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            Map<String, AttributeValue> m = av.getM();
+            result.put("status",        getS(m, "status"));
+            result.put("createdAt",     getS(m, "createdAt"));
+            result.put("total",         getN(m, "total"));
+            result.put("paymentMethod", getS(m, "paymentMethod"));
+            result.put("amountPaid",    getN(m, "amountPaid"));
+            result.put("change",        getN(m, "change"));
+            // Convert items list
+            List<Map<String, Object>> items = new ArrayList<>();
+            if (m.containsKey("items") && m.get("items").getL() != null) {
+                for (AttributeValue itemAv : m.get("items").getL()) {
+                    Map<String, AttributeValue> im = itemAv.getM();
+                    if (im == null) continue;
+                    Map<String, Object> it = new LinkedHashMap<>();
+                    it.put("productId",   getS(im, "productId"));
+                    it.put("productName", getS(im, "productName"));
+                    it.put("unitPrice",   getN(im, "unitPrice"));
+                    it.put("quantity",    (int) getN(im, "quantity"));
+                    it.put("subtotal",    getN(im, "subtotal"));
+                    items.add(it);
+                }
+            }
+            result.put("items", items);
+            return result;
+        }
+
+        return new LinkedHashMap<>();
+    }
+
+    /**
+     * Reads the "producto" column from a DynamoDB item (Productos table).
+     * Supports JSON string format and native DynamoDB Map format.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readProducto(Map<String, AttributeValue> item) {
+        AttributeValue av = item.get("producto");
+        if (av == null) return new LinkedHashMap<>();
+
+        // Format 1: JSON string
+        if (av.getS() != null) {
+            try {
+                return objectMapper.readValue(av.getS(), Map.class);
+            } catch (Exception ignored) {}
+        }
+
+        // Format 2: native DynamoDB Map (boto3.resource inserts this way)
+        if (av.getM() != null) {
+            Map<String, AttributeValue> m = av.getM();
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("name",                getS(m, "name"));
+            result.put("price",               getN(m, "price"));
+            result.put("stock_level",         (int) getN(m, "stock_level"));
+            result.put("low_stock_threshold", (int) getN(m, "low_stock_threshold"));
+            return result;
+        }
+
+        return new LinkedHashMap<>();
     }
 
     private Map<String, Object> findProduct(String productRef) {
@@ -402,52 +463,39 @@ public class SaveSaleHandler implements RequestHandler<APIGatewayProxyRequestEve
                     .withTableName(productosTable)
                     .withKey(Map.of("id", new AttributeValue(productId))));
             if (r.getItem() == null || r.getItem().isEmpty()) return;
+
             Map<String, AttributeValue> item = new HashMap<>(r.getItem());
-            Map<String, AttributeValue> productoMap = item.containsKey("producto") && item.get("producto").getM() != null
-                    ? new HashMap<>(item.get("producto").getM()) : new HashMap<>();
-            int current  = (int) getN(productoMap, "stock_level");
+            Map<String, Object> producto = readProducto(item);
+            int current  = toInt(producto.get("stock_level"));
             int newStock = Math.max(0, current - qty);
-            productoMap.put("stock_level", new AttributeValue().withN(String.valueOf(newStock)));
-            item.put("producto", new AttributeValue().withM(productoMap));
+            producto.put("stock_level", newStock);
+
+            item.put("producto", new AttributeValue(objectMapper.writeValueAsString(producto)));
             dynamoClient.putItem(new PutItemRequest().withTableName(productosTable).withItem(item));
         } catch (Exception ignored) {}
     }
 
     private Map<String, Object> toSale(Map<String, AttributeValue> item) {
-        Map<String, Object> s = new HashMap<>();
-        s.put("id", getS(item, "id"));
-        Map<String, AttributeValue> d = getDetalleMap(item);
-        s.put("status", getS(d, "status"));
-        s.put("total",  getN(d, "total"));
-        List<Map<String, Object>> items = new ArrayList<>();
-        if (d.containsKey("items") && d.get("items").getL() != null) {
-            for (AttributeValue av : d.get("items").getL()) {
-                Map<String, AttributeValue> m = av.getM();
-                if (m == null) continue;
-                Map<String, Object> it = new HashMap<>();
-                it.put("productId",   m.get("productId")   != null ? m.get("productId").getS()   : "");
-                it.put("productName", m.get("productName") != null ? m.get("productName").getS() : "");
-                it.put("unitPrice",   toDouble(m.get("unitPrice")  != null ? m.get("unitPrice").getN()  : "0"));
-                it.put("quantity",    (int) toDouble(m.get("quantity") != null ? m.get("quantity").getN() : "0"));
-                it.put("subtotal",    toDouble(m.get("subtotal")   != null ? m.get("subtotal").getN()   : "0"));
-                items.add(it);
-            }
-        }
-        s.put("items", items);
+        Map<String, Object> detalle = readDetalle(item);
+        Map<String, Object> s = new LinkedHashMap<>();
+        s.put("id",     getS(item, "id"));
+        s.put("status", detalle.getOrDefault("status", ""));
+        s.put("total",  detalle.getOrDefault("total",  0));
+        s.put("items",  detalle.getOrDefault("items",  new ArrayList<>()));
         return s;
     }
 
     private Map<String, Object> toProductView(Map<String, AttributeValue> item) {
-        Map<String, Object> p = new HashMap<>();
-        Map<String, AttributeValue> productoMap = item.containsKey("producto") && item.get("producto").getM() != null
-                ? item.get("producto").getM() : item;
-        int stockLevel   = (int) getN(productoMap, "stock_level");
-        int lowThreshold = (int) getN(productoMap, "low_stock_threshold");
+        Map<String, Object> producto = readProducto(item);
+        int stockLevel   = toInt(producto.get("stock_level"));
+        int lowThreshold = toInt(producto.get("low_stock_threshold"));
         if (lowThreshold == 0) lowThreshold = 5;
+
+        Map<String, Object> p = new LinkedHashMap<>();
         p.put("id",                getS(item, "id"));
         p.put("code",              getS(item, "code"));
-        p.put("name",              getS(productoMap, "name"));
-        p.put("price",             getN(productoMap, "price"));
+        p.put("name",              str(producto.get("name")));
+        p.put("price",             toDouble(producto.get("price")));
         p.put("stockLevel",        stockLevel);
         p.put("lowStockThreshold", lowThreshold);
         p.put("outOfStock",        stockLevel == 0);

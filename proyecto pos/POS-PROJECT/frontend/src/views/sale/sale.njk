@@ -30,7 +30,6 @@
         <input type="text" id="product-search"
           placeholder="Busca un producto por codigo o nombre..."
           autocomplete="off"
-          oninput="onSearchInput()"
           onkeydown="onSearchKeydown(event)"
           style="width:100%; padding:0.6rem 1rem; background:var(--dark-3); border:1px solid var(--gray-1); border-radius:var(--radius-sm); font-size:0.92rem; font-family:inherit; color:var(--white); outline:none; transition:border-color 0.2s, box-shadow 0.2s;"
           onfocus="this.style.borderColor='var(--purple-500)'; this.style.boxShadow='0 0 0 3px rgba(124,58,237,0.18)'"
@@ -319,12 +318,7 @@
   /* ── busqueda ────────────────────────────────────────────────────────── */
 
   window.onSearchInput = function() {
-    var raw    = document.getElementById('product-search').value;
-    var parsed = parseInput(raw);
-    selectedProductId = null;
-    clearTimeout(searchTimeout);
-    if (!parsed.query) { closeDropdown(); return; }
-    searchTimeout = setTimeout(function() { fetchSuggestions(parsed.query); }, 180);
+    // Búsqueda desactivada en tiempo real — solo se busca al presionar Enter
   };
 
   async function fetchSuggestions(query) {
@@ -408,14 +402,51 @@
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (highlightedIndex >= 0 && items[highlightedIndex]) {
-        window.ddSelect(items[highlightedIndex]);  // ddSelect ya llama addProduct
+        // Ya hay un item resaltado en el dropdown → seleccionarlo
+        window.ddSelect(items[highlightedIndex]);
+      } else if (items.length > 0) {
+        // Hay resultados en el dropdown → seleccionar el primero
+        window.ddSelect(items[0]);
+      } else if (document.getElementById('search-dropdown').style.display === 'block') {
+        // Dropdown abierto pero sin resultados → no hacer nada
       } else {
-        addProduct();
+        // Dropdown cerrado → buscar primero, luego agregar
+        var raw = document.getElementById('product-search').value.trim();
+        if (!raw) return;
+        var parsed = parseInput(raw);
+        if (!parsed.query) return;
+        fetchSuggestionsAndAdd(parsed.query, parsed.quantity);
       }
     } else if (e.key === 'Escape') {
       closeDropdown();
     }
   };
+
+  // Busca sugerencias y si hay exactamente 1 resultado lo agrega directo;
+  // si hay varios, muestra el dropdown para que el usuario elija.
+  async function fetchSuggestionsAndAdd(query, quantity) {
+    try {
+      var res = await fetch('/sale/search-products?q=' + encodeURIComponent(query));
+      if (!res.ok) { closeDropdown(); showError('Producto no encontrado.'); return; }
+      var products = await res.json();
+      if (!products || !products.length) {
+        showError('No se encontraron productos con "' + query + '".');
+        return;
+      }
+      if (products.length === 1) {
+        // Un solo resultado → agregar directo
+        selectedProductId = products[0].id;
+        var raw = document.getElementById('product-search').value;
+        var m   = raw.match(/^(\d+)\*/);
+        document.getElementById('product-search').value = m ? m[0] + products[0].name : products[0].name;
+        closeDropdown();
+        addProduct();
+      } else {
+        // Varios resultados → mostrar dropdown
+        renderDropdown(products);
+      }
+    } catch(e) { closeDropdown(); showError('Error de conexion.'); }
+  }
 
   /* ── Selección de fila con ↑ ↓ y cantidad con + / - ─────────────────── */
 

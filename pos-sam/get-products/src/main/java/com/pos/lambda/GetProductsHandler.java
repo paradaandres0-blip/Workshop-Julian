@@ -12,17 +12,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.*;
 
 /**
- * Estructura DynamoDB Productos:
+ * Estructura DynamoDB Productos — columna "producto" guardada como JSON string plano:
  * {
- *   "id": "uuid",          ← Partition Key
- *   "code": "7702001001",
- *   "producto": {
- *     "name": "...",
- *     "price": 1.50,
- *     "stock_level": 100,
- *     "low_stock_threshold": 10
- *   }
+ *   "id":      "uuid",
+ *   "code":    "100006",
+ *   "producto": "{\"name\":\"Red Bull 250ml\",\"price\":3500,\"stock_level\":40,\"low_stock_threshold\":5}"
  * }
+ *
+ * Esto hace que la consola de AWS muestre el JSON legible directamente en la columna "producto".
  */
 public class GetProductsHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
@@ -37,20 +34,20 @@ public class GetProductsHandler implements RequestHandler<APIGatewayProxyRequest
 
     public GetProductsHandler() {
         this.dynamoClient = AmazonDynamoDBClientBuilder.standard().build();
-        this.tableName = System.getenv("PRODUCTOS_TABLE");
+        this.tableName    = System.getenv("PRODUCTOS_TABLE");
         this.objectMapper = new ObjectMapper();
     }
 
     GetProductsHandler(AmazonDynamoDB dynamoClient, String tableName) {
         this.dynamoClient = dynamoClient;
-        this.tableName = tableName;
+        this.tableName    = tableName;
         this.objectMapper = new ObjectMapper();
     }
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
-        String method = input.getHttpMethod();
-        String path   = input.getPath();
+        String method     = input.getHttpMethod();
+        String path       = input.getPath();
         Map<String, String> pathParams = input.getPathParameters();
 
         try {
@@ -96,7 +93,7 @@ public class GetProductsHandler implements RequestHandler<APIGatewayProxyRequest
         List<Map<String, Object>> products = new ArrayList<>();
 
         if (BarcodeDetector.isBarcode(q)) {
-            // Search by code field
+            // Search by code field (exact match)
             ScanResult sr = dynamoClient.scan(new ScanRequest()
                     .withTableName(tableName)
                     .withFilterExpression("#c = :q")
@@ -104,18 +101,21 @@ public class GetProductsHandler implements RequestHandler<APIGatewayProxyRequest
                     .withExpressionAttributeValues(Map.of(":q", new AttributeValue(q))));
             for (Map<String, AttributeValue> item : sr.getItems()) products.add(toProduct(item));
 
-            // If barcode search returns nothing → error message
             if (products.isEmpty()) {
                 return response(404, "{\"error\":\"Código incorrecto, vuelve a intentarlo\"}");
             }
         } else {
-            // Search by name inside producto map
-            ScanResult sr = dynamoClient.scan(new ScanRequest()
-                    .withTableName(tableName)
-                    .withFilterExpression("contains(producto.#n, :q)")
-                    .withExpressionAttributeNames(Map.of("#n", "name"))
-                    .withExpressionAttributeValues(Map.of(":q", new AttributeValue(q))));
-            for (Map<String, AttributeValue> item : sr.getItems()) products.add(toProduct(item));
+            // Text search: scan all and filter in-Lambda (case-insensitive match on name)
+            // DynamoDB contains() is case-sensitive, so we do the filtering here.
+            String qLower = q.toLowerCase();
+            ScanResult sr = dynamoClient.scan(new ScanRequest().withTableName(tableName));
+            for (Map<String, AttributeValue> item : sr.getItems()) {
+                Map<String, Object> producto = readProducto(item);
+                String name = str(producto.get("name")).toLowerCase();
+                if (name.contains(qLower)) {
+                    products.add(toProduct(item));
+                }
+            }
         }
 
         return response(200, objectMapper.writeValueAsString(products));
@@ -135,13 +135,12 @@ public class GetProductsHandler implements RequestHandler<APIGatewayProxyRequest
 
     // ── POST create ──────────────────────────────────────────────────────────
 
+    @SuppressWarnings("unchecked")
     private APIGatewayProxyResponseEvent handleCreate(APIGatewayProxyRequestEvent input, Context context) throws Exception {
         String body = input.getBody();
         if (body == null || body.isBlank()) return response(400, "{\"error\":\"El cuerpo es requerido\"}");
 
-        @SuppressWarnings("unchecked")
         Map<String, Object> req = objectMapper.readValue(body, Map.class);
-
         String code = str(req.get("code"));
         String name = str(req.get("name"));
         if (code == null || code.isBlank() || name == null || name.isBlank()) {
@@ -158,22 +157,22 @@ public class GetProductsHandler implements RequestHandler<APIGatewayProxyRequest
             return response(409, "{\"error_code\":\"DUPLICATE_PRODUCT\",\"message\":\"El código de producto ya existe\"}");
         }
 
-        String id = UUID.randomUUID().toString();
-        double price = toDouble(req.get("price"));
-        int stockLevel = toInt(req.get("stock_level"));
+        String id        = UUID.randomUUID().toString();
+        double price     = toDouble(req.get("price"));
+        int stockLevel   = toInt(req.get("stock_level"));
         int lowThreshold = req.containsKey("low_stock_threshold") ? toInt(req.get("low_stock_threshold")) : 5;
 
-        // Build producto map
-        Map<String, AttributeValue> productoMap = new HashMap<>();
-        productoMap.put("name",                new AttributeValue(name));
-        productoMap.put("price",               new AttributeValue().withN(String.valueOf(price)));
-        productoMap.put("stock_level",         new AttributeValue().withN(String.valueOf(stockLevel)));
-        productoMap.put("low_stock_threshold", new AttributeValue().withN(String.valueOf(lowThreshold)));
+        // Build producto as plain JSON object
+        Map<String, Object> productoObj = new LinkedHashMap<>();
+        productoObj.put("name",                name);
+        productoObj.put("price",               price);
+        productoObj.put("stock_level",         stockLevel);
+        productoObj.put("low_stock_threshold", lowThreshold);
 
         Map<String, AttributeValue> item = new HashMap<>();
         item.put("id",       new AttributeValue(id));
         item.put("code",     new AttributeValue(code));
-        item.put("producto", new AttributeValue().withM(productoMap));
+        item.put("producto", new AttributeValue(objectMapper.writeValueAsString(productoObj)));
 
         dynamoClient.putItem(new PutItemRequest().withTableName(tableName).withItem(item));
         return response(201, objectMapper.writeValueAsString(toProduct(item)));
@@ -181,6 +180,7 @@ public class GetProductsHandler implements RequestHandler<APIGatewayProxyRequest
 
     // ── PUT update ───────────────────────────────────────────────────────────
 
+    @SuppressWarnings("unchecked")
     private APIGatewayProxyResponseEvent handleUpdate(String id, APIGatewayProxyRequestEvent input, Context context) throws Exception {
         GetItemResult existing = dynamoClient.getItem(new GetItemRequest()
                 .withTableName(tableName)
@@ -192,22 +192,18 @@ public class GetProductsHandler implements RequestHandler<APIGatewayProxyRequest
         String body = input.getBody();
         if (body == null || body.isBlank()) return response(400, "{\"error\":\"El cuerpo es requerido\"}");
 
-        @SuppressWarnings("unchecked")
         Map<String, Object> req = objectMapper.readValue(body, Map.class);
 
+        // Read existing producto
+        Map<String, Object> productoObj = readProducto(existing.getItem());
+
+        if (req.containsKey("name"))                productoObj.put("name",                str(req.get("name")));
+        if (req.containsKey("price"))               productoObj.put("price",               toDouble(req.get("price")));
+        if (req.containsKey("stock_level"))         productoObj.put("stock_level",         toInt(req.get("stock_level")));
+        if (req.containsKey("low_stock_threshold")) productoObj.put("low_stock_threshold", toInt(req.get("low_stock_threshold")));
+
         Map<String, AttributeValue> item = new HashMap<>(existing.getItem());
-
-        // Get existing producto map or create new
-        Map<String, AttributeValue> productoMap = item.containsKey("producto") && item.get("producto").getM() != null
-                ? new HashMap<>(item.get("producto").getM())
-                : new HashMap<>();
-
-        if (req.containsKey("name"))               productoMap.put("name",                new AttributeValue(str(req.get("name"))));
-        if (req.containsKey("price"))              productoMap.put("price",               new AttributeValue().withN(String.valueOf(toDouble(req.get("price")))));
-        if (req.containsKey("stock_level"))        productoMap.put("stock_level",         new AttributeValue().withN(String.valueOf(toInt(req.get("stock_level")))));
-        if (req.containsKey("low_stock_threshold"))productoMap.put("low_stock_threshold", new AttributeValue().withN(String.valueOf(toInt(req.get("low_stock_threshold")))));
-
-        item.put("producto", new AttributeValue().withM(productoMap));
+        item.put("producto", new AttributeValue(objectMapper.writeValueAsString(productoObj)));
         dynamoClient.putItem(new PutItemRequest().withTableName(tableName).withItem(item));
         return response(200, objectMapper.writeValueAsString(toProduct(item)));
     }
@@ -230,29 +226,52 @@ public class GetProductsHandler implements RequestHandler<APIGatewayProxyRequest
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /**
-     * Converts DynamoDB item to flat product map for API response.
-     * Reads name/price/stock from nested "producto" map.
+     * Reads the "producto" column from a DynamoDB item.
+     * Supports two storage formats:
+     *   1. JSON string (new format): producto stored as plain JSON string → parse directly.
+     *   2. Native DynamoDB Map (boto3.resource inserts this way) → convert to plain map.
+     */
+    @SuppressWarnings("unchecked")
+    Map<String, Object> readProducto(Map<String, AttributeValue> item) {
+        AttributeValue av = item.get("producto");
+        if (av == null) return new LinkedHashMap<>();
+
+        // Format 1: JSON string (preferred — shows as plain JSON in AWS console)
+        if (av.getS() != null) {
+            try {
+                return objectMapper.readValue(av.getS(), Map.class);
+            } catch (Exception ignored) {}
+        }
+
+        // Format 2: native DynamoDB Map (boto3.resource inserts this way)
+        if (av.getM() != null) {
+            Map<String, AttributeValue> m = av.getM();
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("name",                getS(m, "name"));
+            result.put("price",               getN(m, "price"));
+            result.put("stock_level",         (int) getN(m, "stock_level"));
+            result.put("low_stock_threshold", (int) getN(m, "low_stock_threshold"));
+            return result;
+        }
+
+        return new LinkedHashMap<>();
+    }
+
+    /**
+     * Converts a DynamoDB item to a flat product map for the API response.
      */
     Map<String, Object> toProduct(Map<String, AttributeValue> item) {
-        Map<String, Object> p = new HashMap<>();
-        String id = getS(item, "id");
-        String code = getS(item, "code");
+        Map<String, Object> producto = readProducto(item);
 
-        // Read from nested "producto" map
-        Map<String, AttributeValue> productoMap = item.containsKey("producto") && item.get("producto").getM() != null
-                ? item.get("producto").getM()
-                : item; // fallback for old format
-
-        double price     = getN(productoMap, "price");
-        int stockLevel   = (int) getN(productoMap, "stock_level");
-        int lowThreshold = (int) getN(productoMap, "low_stock_threshold");
+        int stockLevel   = toInt(producto.get("stock_level"));
+        int lowThreshold = toInt(producto.get("low_stock_threshold"));
         if (lowThreshold == 0) lowThreshold = 5;
-        String name = getS(productoMap, "name");
 
-        p.put("id",                id);
-        p.put("code",              code);
-        p.put("name",              name);
-        p.put("price",             price);
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("id",                getS(item, "id"));
+        p.put("code",              getS(item, "code"));
+        p.put("name",              str(producto.get("name")));
+        p.put("price",             toDouble(producto.get("price")));
         p.put("stockLevel",        stockLevel);
         p.put("lowStockThreshold", lowThreshold);
         p.put("outOfStock",        stockLevel == 0);
@@ -274,7 +293,7 @@ public class GetProductsHandler implements RequestHandler<APIGatewayProxyRequest
         return 0;
     }
 
-    private String str(Object o) { return o != null ? o.toString() : null; }
+    private String str(Object o) { return o != null ? o.toString() : ""; }
     private double toDouble(Object o) { try { return o != null ? Double.parseDouble(o.toString()) : 0; } catch (Exception e) { return 0; } }
     private int toInt(Object o) { try { return o != null ? (int) Double.parseDouble(o.toString()) : 0; } catch (Exception e) { return 0; } }
 
