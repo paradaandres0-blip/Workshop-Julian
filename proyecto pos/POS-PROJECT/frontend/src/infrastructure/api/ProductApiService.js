@@ -12,7 +12,16 @@ class ProductApiService extends IProductService {
     }
 
     async search(query) {
-        return this._apiClient.get(`/api/v1/products/search?q=${encodeURIComponent(query)}`);
+        // Trae todos los productos y filtra en el cliente (case-insensitive)
+        // para no depender del filtro case-sensitive de DynamoDB
+        const all = await this._apiClient.get('/api/v1/products');
+        if (!all || !Array.isArray(all)) return [];
+        const q = query.toLowerCase().trim();
+        return all.filter(p => {
+            const name = (p.name || '').toLowerCase();
+            const code = (p.code || '').toLowerCase();
+            return name.includes(q) || code.includes(q);
+        });
     }
 
     async getById(id) {

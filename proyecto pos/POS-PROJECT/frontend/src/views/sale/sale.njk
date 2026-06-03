@@ -1,4 +1,4 @@
-{% extends "layout.njk" %}
+﻿{% extends "layout.njk" %}
 
 {% block content %}
 
@@ -9,7 +9,6 @@
     <div style="display:flex; align-items:center; gap:0.75rem;">
       <div style="width:28px; height:28px; background:linear-gradient(135deg,var(--purple-600),var(--purple-400)); border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:0.9rem;">&#127860;</div>
       <span style="font-weight:700; font-size:0.95rem; color:var(--white);">Supermercado <span style="color:var(--purple-300);">El Tenedor</span></span>
-      <span onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'F1',bubbles:true}))" style="font-size:0.72rem; color:var(--gray-3); cursor:pointer; border:1px solid var(--gray-1); border-radius:4px; padding:0.1rem 0.4rem;" title="Ver atajos de teclado">F1 Ayuda</span>
     </div>
     <div style="display:flex; align-items:center; gap:0.75rem;">
       <span id="items-count" class="stat-chip">0 productos</span>
@@ -20,6 +19,7 @@
   {# Tabs de ventas #}
   <div id="tabs-bar" style="flex-shrink:0; display:flex; align-items:center; border-bottom:1px solid var(--border); background:var(--dark-3); padding:0 0.75rem; overflow-x:auto; min-height:42px;">
     <div id="tabs-list" style="display:flex; align-items:flex-end; gap:2px; flex:1;"></div>
+    <button onclick="startSale()" style="margin-left:0.5rem;background:none;border:1px solid var(--purple-500);color:var(--purple-300);border-radius:6px;padding:0.25rem 0.75rem;font-size:0.8rem;cursor:pointer;white-space:nowrap;flex-shrink:0;" title="Nueva venta">+ Nueva Venta</button>
   </div>
 
   {# Barra de busqueda #}
@@ -28,18 +28,15 @@
     <div style="display:flex; gap:0.6rem; align-items:center;">
       <div style="flex:1; position:relative;">
         <input type="text" id="product-search"
-          placeholder="Busca un producto por codigo o nombre..."
+          placeholder="Codigo, nombre... o 2*leche para agregar 2 unidades"
           autocomplete="off"
+          oninput="onSearchInput()"
           onkeydown="onSearchKeydown(event)"
           style="width:100%; padding:0.6rem 1rem; background:var(--dark-3); border:1px solid var(--gray-1); border-radius:var(--radius-sm); font-size:0.92rem; font-family:inherit; color:var(--white); outline:none; transition:border-color 0.2s, box-shadow 0.2s;"
           onfocus="this.style.borderColor='var(--purple-500)'; this.style.boxShadow='0 0 0 3px rgba(124,58,237,0.18)'"
           onblur="this.style.borderColor='var(--gray-1)'; this.style.boxShadow='none'">
         <div id="search-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:200; background:var(--dark-3); border:1px solid var(--purple-500); border-radius:var(--radius-sm); box-shadow:var(--shadow); max-height:240px; overflow-y:auto; margin-top:2px;"></div>
       </div>
-      <button class="btn btn-primary" onclick="startSale()" style="padding:0.6rem 1.2rem; font-size:0.88rem; white-space:nowrap; font-weight:700;">
-        + Nueva Venta
-      </button>
-
     </div>
   </div>
 
@@ -59,7 +56,7 @@
         <tr>
           <td colspan="5" class="empty-state" style="padding:4rem 1rem;">
             <div style="font-size:2.5rem; margin-bottom:0.6rem;">&#128722;</div>
-            <div>Haz clic en <strong>+ Nueva Venta</strong> para comenzar</div>
+            <div>Haz clic en "+ Nueva Venta" para comenzar</div>
           </td>
         </tr>
       </tbody>
@@ -89,90 +86,12 @@
 
 </div>
 
-{# Panel de atajos de teclado (F1) #}
-<div id="shortcuts-tip" style="display:none; position:fixed; bottom:1.2rem; right:1.2rem; z-index:999; background:var(--dark-3); border:1px solid var(--purple-500); border-radius:var(--radius); padding:1rem 1.25rem; box-shadow:var(--shadow); min-width:260px;">
-  <div style="font-weight:700; color:var(--purple-300); margin-bottom:0.75rem; font-size:0.88rem; display:flex; justify-content:space-between; align-items:center;">
-    <span>&#9000; Atajos de teclado</span>
-    <span style="font-size:0.72rem; color:var(--gray-3);">F1 para cerrar</span>
-  </div>
-  <table style="border:none; box-shadow:none; margin:0; width:100%; background:transparent;">
-    <tbody>
-      <tr style="border:none;"><td style="padding:0.2rem 0.5rem 0.2rem 0; border:none;"><kbd style="background:var(--dark-2);border:1px solid var(--gray-1);border-radius:4px;padding:0.1rem 0.4rem;font-size:0.78rem;color:var(--white);">F2</kbd></td><td style="padding:0.2rem 0; border:none; font-size:0.82rem; color:var(--text-muted);">Nueva Venta</td></tr>
-      <tr style="border:none;"><td style="padding:0.2rem 0.5rem 0.2rem 0; border:none;"><kbd style="background:var(--dark-2);border:1px solid var(--gray-1);border-radius:4px;padding:0.1rem 0.4rem;font-size:0.78rem;color:var(--white);">F4</kbd></td><td style="padding:0.2rem 0; border:none; font-size:0.82rem; color:var(--text-muted);">Ir a Pagar / Confirmar</td></tr>
-      <tr style="border:none;"><td style="padding:0.2rem 0.5rem 0.2rem 0; border:none;"><kbd style="background:var(--dark-2);border:1px solid var(--gray-1);border-radius:4px;padding:0.1rem 0.4rem;font-size:0.78rem;color:var(--white);">F5</kbd></td><td style="padding:0.2rem 0; border:none; font-size:0.82rem; color:var(--text-muted);">Cerrar venta activa</td></tr>
-      <tr style="border:none;"><td style="padding:0.2rem 0.5rem 0.2rem 0; border:none;"><kbd style="background:var(--dark-2);border:1px solid var(--gray-1);border-radius:4px;padding:0.1rem 0.4rem;font-size:0.78rem;color:var(--white);">Ctrl+Tab</kbd></td><td style="padding:0.2rem 0; border:none; font-size:0.82rem; color:var(--text-muted);">Siguiente venta</td></tr>
-      <tr style="border:none;"><td style="padding:0.2rem 0.5rem 0.2rem 0; border:none;"><kbd style="background:var(--dark-2);border:1px solid var(--gray-1);border-radius:4px;padding:0.1rem 0.4rem;font-size:0.78rem;color:var(--white);">Ctrl+&#8679;+Tab</kbd></td><td style="padding:0.2rem 0; border:none; font-size:0.82rem; color:var(--text-muted);">Venta anterior</td></tr>
-      <tr style="border:none;"><td style="padding:0.2rem 0.5rem 0.2rem 0; border:none;"><kbd style="background:var(--dark-2);border:1px solid var(--gray-1);border-radius:4px;padding:0.1rem 0.4rem;font-size:0.78rem;color:var(--white);">Esc</kbd></td><td style="padding:0.2rem 0; border:none; font-size:0.82rem; color:var(--text-muted);">Cerrar modal</td></tr>
-      <tr style="border:none;"><td style="padding:0.2rem 0.5rem 0.2rem 0; border:none;"><kbd style="background:var(--dark-2);border:1px solid var(--gray-1);border-radius:4px;padding:0.1rem 0.4rem;font-size:0.78rem;color:var(--white);">Enter</kbd></td><td style="padding:0.2rem 0; border:none; font-size:0.82rem; color:var(--text-muted);">Confirmar pago</td></tr>
-      <tr style="border:none;"><td style="padding:0.2rem 0.5rem 0.2rem 0; border:none;"><kbd style="background:var(--dark-2);border:1px solid var(--gray-1);border-radius:4px;padding:0.1rem 0.4rem;font-size:0.78rem;color:var(--white);">F1</kbd></td><td style="padding:0.2rem 0; border:none; font-size:0.82rem; color:var(--text-muted);">Mostrar/ocultar esta ayuda</td></tr>
-    </tbody>
-  </table>
-</div>
-
-{# Modal Escaner de Codigo de Barras #}
-<div class="modal-overlay" id="scanner-modal">
-  <div class="modal" style="max-width:480px;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-      <h2 style="margin:0; font-size:1.1rem; color:var(--white); display:flex; align-items:center; gap:0.5rem;">
-        &#128247; Escanear Codigo de Barras
-      </h2>
-      <button onclick="closeScanner()" style="background:none;border:none;color:var(--gray-3);cursor:pointer;font-size:1.2rem;padding:0.2rem;">X</button>
-    </div>
-    <div id="scanner-error" class="alert alert-error" style="display:none; margin-bottom:0.75rem;"></div>
-    <div id="scanner-status" style="font-size:0.82rem; color:var(--text-muted); margin-bottom:0.75rem; text-align:center;">
-      Apunta la camara al codigo de barras del producto
-    </div>
-    {# Viewport de la camara #}
-    <div id="scanner-viewport" style="position:relative; width:100%; background:#000; border-radius:var(--radius-sm); overflow:hidden; min-height:260px; display:flex; align-items:center; justify-content:center;">
-      <video id="scanner-video" style="width:100%; display:block;" autoplay playsinline muted></video>
-      <canvas id="scanner-canvas" style="display:none;"></canvas>
-      {# Linea de escaneo animada #}
-      <div id="scan-line" style="display:none; position:absolute; left:10%; right:10%; height:2px; background:var(--purple-400); box-shadow:0 0 8px var(--purple-400); animation:scanline 1.5s ease-in-out infinite;"></div>
-      {# Overlay de esquinas #}
-      <div style="position:absolute; inset:0; pointer-events:none;">
-        <div style="position:absolute; top:15%; left:15%; width:40px; height:40px; border-top:3px solid var(--purple-400); border-left:3px solid var(--purple-400); border-radius:3px 0 0 0;"></div>
-        <div style="position:absolute; top:15%; right:15%; width:40px; height:40px; border-top:3px solid var(--purple-400); border-right:3px solid var(--purple-400); border-radius:0 3px 0 0;"></div>
-        <div style="position:absolute; bottom:15%; left:15%; width:40px; height:40px; border-bottom:3px solid var(--purple-400); border-left:3px solid var(--purple-400); border-radius:0 0 0 3px;"></div>
-        <div style="position:absolute; bottom:15%; right:15%; width:40px; height:40px; border-bottom:3px solid var(--purple-400); border-right:3px solid var(--purple-400); border-radius:0 0 3px 0;"></div>
-      </div>
-    </div>
-    {# Resultado detectado #}
-    <div id="scan-result" style="display:none; margin-top:0.75rem; background:var(--dark-3); border-radius:var(--radius-sm); padding:0.75rem 1rem; display:flex; align-items:center; gap:0.75rem;">
-      <span style="font-size:1.2rem;">&#9989;</span>
-      <div>
-        <div style="font-size:0.72rem; color:var(--text-muted);">Codigo detectado</div>
-        <div id="scan-result-code" style="font-weight:700; color:var(--white); font-size:0.95rem;"></div>
-      </div>
-    </div>
-    {# Input manual como fallback #}
-    <div style="margin-top:0.75rem;">
-      <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.35rem;">O ingresa el codigo manualmente:</div>
-      <div style="display:flex; gap:0.5rem;">
-        <input type="text" id="manual-barcode" placeholder="Ej: 7702001234567"
-          style="flex:1; padding:0.5rem 0.75rem; background:var(--dark-3); border:1px solid var(--gray-1); border-radius:var(--radius-sm); color:var(--white); font-family:inherit; font-size:0.88rem; outline:none;"
-          onkeydown="if(event.key==='Enter') addByBarcode(this.value)">
-        <button class="btn btn-primary" onclick="addByBarcode(document.getElementById('manual-barcode').value)" style="padding:0.5rem 1rem; font-size:0.85rem;">
-          Agregar
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<style>
-@keyframes scanline {
-  0%   { top: 20%; }
-  50%  { top: 75%; }
-  100% { top: 20%; }
-}
-</style>
-
 {# Modal de Pago #}
 <div class="modal-overlay" id="payment-modal">
   <div class="modal" style="max-width:420px;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
       <h2 style="margin:0; font-size:1.1rem; color:var(--white);">Confirmar Pago</h2>
-      <button onclick="closePaymentModal()" style="background:none;border:none;color:var(--gray-3);cursor:pointer;font-size:1.2rem;padding:0.2rem;">X</button>
+      <button onclick="closePaymentModal()" style="background:none;border:none;color:var(--gray-3);cursor:pointer;font-size:1.2rem;padding:0.2rem;">&#10005;</button>
     </div>
     <div id="payment-error" class="alert alert-error" style="display:none; margin-bottom:0.75rem;"></div>
     <div style="background:var(--dark-3); border-radius:var(--radius-sm); padding:0.85rem 1rem; margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center;">
@@ -205,36 +124,16 @@
 
 <script>
 (function() {
-  var sales      = {};      // { [id]: { id, label, items[] } }
-  var saleOrder  = [];      // orden de creacion
-  var activeId   = null;
+  // ── Estado ──────────────────────────────────────────────────────────────────
+  var sales     = {};   // { [saleId]: { id, label, items[] } }
+  var saleOrder = [];   // ids en orden de creacion
+  var activeId  = null;
   var tabCounter = 0;
-
   var selectedProductId = null;
   var highlightedIndex  = -1;
   var searchTimeout     = null;
-  var selectedRowIndex  = -1;  // fila seleccionada en la tabla de items
 
-  window.addEventListener('load', function() {
-    renderTabs();
-    document.getElementById('product-search').focus();
-  });
-
-  /* ── helpers ─────────────────────────────────────────────────────────── */
-
-  function showError(msg) {
-    var el = document.getElementById('sale-error');
-    el.textContent = msg;
-    el.style.display = 'flex';
-    setTimeout(function() { el.style.display = 'none'; }, 4000);
-  }
-
-  function parseInput(raw) {
-    var m = raw.match(/^(\d+)\*(.*)$/);
-    if (m) return { quantity: parseInt(m[1], 10) || 1, query: m[2].trim() };
-    return { quantity: 1, query: raw.trim() };
-  }
-
+  // ── Helpers ─────────────────────────────────────────────────────────────────
   function activeSale() { return activeId ? sales[activeId] : null; }
 
   function calcSaleTotal(items) {
@@ -242,35 +141,32 @@
     return items.reduce(function(s, it) { return s + parseFloat(it.subtotal || 0); }, 0);
   }
 
-  /* ── tabs ────────────────────────────────────────────────────────────── */
-
+  // ── Tabs ────────────────────────────────────────────────────────────────────
   function renderTabs() {
     var list = document.getElementById('tabs-list');
+    if (!list) return;
     if (!saleOrder.length) { list.innerHTML = ''; updateHeader(); return; }
-
     var html = '';
     for (var i = 0; i < saleOrder.length; i++) {
-      var id      = saleOrder[i];
-      var s       = sales[id];
-      var active  = id === activeId;
-      var n       = s.items ? s.items.length : 0;
-      var total   = calcSaleTotal(s.items);
-      var border  = active ? 'var(--purple-500)' : 'var(--border)';
-      var bg      = active ? 'var(--dark-2)'     : 'var(--dark-3)';
-      var color   = active ? 'var(--purple-300)' : 'var(--gray-3)';
-      var weight  = active ? '700' : '500';
-
+      var id     = saleOrder[i];
+      var s      = sales[id];
+      var active = id === activeId;
+      var n      = s.items ? s.items.length : 0;
+      var total  = calcSaleTotal(s.items);
       html += '<div onclick="switchTab(\'' + id + '\')" style="'
-        + 'display:flex;align-items:center;gap:0.4rem;padding:0.4rem 0.75rem 0.5rem;'
-        + 'cursor:pointer;border-radius:6px 6px 0 0;'
-        + 'border:1px solid ' + border + ';border-bottom:' + (active ? '1px solid var(--dark-2)' : '1px solid var(--border)') + ';'
-        + 'background:' + bg + ';margin-bottom:-1px;min-width:110px;max-width:180px;">'
-        + '<span style="font-size:0.78rem;font-weight:' + weight + ';color:' + color + ';flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
-        + s.label + (n > 0 ? ' (' + n + ')' : '')
-        + '</span>'
-        + (n > 0 ? '<span style="font-size:0.7rem;color:var(--purple-300);font-weight:600;white-space:nowrap;">$' + total.toFixed(2) + '</span>' : '')
+        + 'display:flex;align-items:center;gap:0.4rem;padding:0.35rem 0.65rem 0.45rem;cursor:pointer;'
+        + 'border-radius:6px 6px 0 0;'
+        + 'border:1px solid ' + (active ? 'var(--purple-500)' : 'var(--border)') + ';'
+        + 'border-bottom:' + (active ? '1px solid var(--dark-2)' : '1px solid var(--border)') + ';'
+        + 'background:' + (active ? 'var(--dark-2)' : 'var(--dark-3)') + ';'
+        + 'margin-bottom:-1px;min-width:90px;max-width:160px;">'
+        + '<span style="font-size:0.75rem;font-weight:' + (active ? '700' : '500') + ';'
+        + 'color:' + (active ? 'var(--purple-300)' : 'var(--gray-3)') + ';'
+        + 'flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+        + s.label + (n > 0 ? ' (' + n + ')' : '') + '</span>'
+        + (n > 0 ? '<span style="font-size:0.68rem;color:var(--purple-300);font-weight:600;">$' + total.toFixed(0) + '</span>' : '')
         + '<button onclick="event.stopPropagation();closeTab(\'' + id + '\')" '
-        + 'style="background:none;border:none;color:var(--gray-3);cursor:pointer;font-size:0.75rem;padding:0 0.1rem;margin-left:0.2rem;" title="Cerrar">&#10005;</button>'
+        + 'style="background:none;border:none;color:var(--gray-3);cursor:pointer;font-size:0.72rem;padding:0 0.1rem;margin-left:0.15rem;">&#10005;</button>'
         + '</div>';
     }
     list.innerHTML = html;
@@ -282,11 +178,16 @@
     activeId = id;
     renderTabs();
     renderItems();
+    document.getElementById('product-search').value = '';
+    selectedProductId = null;
+    highlightedIndex = -1;
+    closeDropdown();
     document.getElementById('product-search').focus();
   };
 
   window.closeTab = function(id) {
     var idx = saleOrder.indexOf(id);
+    if (idx === -1) return;
     saleOrder.splice(idx, 1);
     delete sales[id];
     if (activeId === id) {
@@ -297,28 +198,30 @@
     document.getElementById('product-search').focus();
   };
 
-  /* ── nueva venta ─────────────────────────────────────────────────────── */
+  function updateHeader() {
+    var s   = activeSale();
+    var n   = s && s.items ? s.items.length : 0;
+    var show = s && n > 0 ? 'inline-flex' : 'none';
+    document.getElementById('items-count').textContent = n + ' producto' + (n !== 1 ? 's' : '');
+    document.getElementById('btn-pay').style.display = show;
+    var btnFooter = document.getElementById('btn-pay-footer');
+    if (btnFooter) btnFooter.style.display = show;
+  }
 
-  window.startSale = async function() {
-    try {
-      var res  = await fetch('/sale/start', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-      var data = await res.json();
-      if (!res.ok) { showError(data.error || 'Error al iniciar.'); return; }
-      tabCounter++;
-      var id = data.id;
-      sales[id]  = { id: id, label: 'Venta ' + tabCounter, items: data.items || [] };
-      saleOrder.push(id);
-      activeId = id;
-      renderTabs();
-      renderItems();
-      document.getElementById('product-search').focus();
-    } catch(e) { showError('Error al iniciar. Verifica el backend.'); }
-  };
-
-  /* ── busqueda ────────────────────────────────────────────────────────── */
+  // ── Busqueda / Dropdown ──────────────────────────────────────────────────────
+  function parseInput(raw) {
+    var m = raw.match(/^(\d+)\*(.*)$/);
+    if (m) return { quantity: parseInt(m[1], 10) || 1, query: m[2].trim() };
+    return { quantity: 1, query: raw.trim() };
+  }
 
   window.onSearchInput = function() {
-    // Búsqueda desactivada en tiempo real — solo se busca al presionar Enter
+    var raw = document.getElementById('product-search').value;
+    var parsed = parseInput(raw);
+    selectedProductId = null;
+    clearTimeout(searchTimeout);
+    if (!parsed.query) { closeDropdown(); return; }
+    searchTimeout = setTimeout(function() { fetchSuggestions(parsed.query); }, 180);
   };
 
   async function fetchSuggestions(query) {
@@ -326,7 +229,7 @@
       var res = await fetch('/sale/search-products?q=' + encodeURIComponent(query));
       if (!res.ok) { closeDropdown(); return; }
       renderDropdown(await res.json());
-    } catch(e) { closeDropdown(); }
+    } catch (e) { closeDropdown(); }
   }
 
   function renderDropdown(products) {
@@ -335,29 +238,19 @@
     if (!products || !products.length) { closeDropdown(); return; }
     var html = '';
     for (var i = 0; i < products.length; i++) {
-      var p       = products[i];
+      var p      = products[i];
       var noStock = p.outOfStock || p.stockLevel === 0;
-      var price   = parseFloat(p.price).toFixed(2);
-      var stock   = noStock ? 'Sin stock' : (p.stockLevel + ' uds.');
-      var scolor  = noStock ? 'var(--danger)' : 'var(--text-muted)';
-      html += '<div class="dd-item"'
-        + ' data-id="'   + p.id + '"'
-        + ' data-name="' + p.name.replace(/"/g, '&quot;') + '"'
-        + ' data-idx="'  + i + '"'
-        + ' onmouseenter="window.ddHighlight(' + i + ')"'
-        + ' onclick="window.ddSelect(this)"'
-        + ' style="display:flex;justify-content:space-between;align-items:center;'
-        + 'padding:0.55rem 1rem;cursor:pointer;opacity:' + (noStock ? '0.45' : '1') + ';'
-        + 'border-bottom:1px solid rgba(255,255,255,0.04);">'
-        + '<div>'
-        + '<span style="font-weight:500;color:var(--white);font-size:0.88rem;">' + p.name + '</span>'
-        + '<span style="font-size:0.75rem;color:var(--gray-3);margin-left:0.4rem;">(' + p.code + ')</span>'
-        + '</div>'
+      html += '<div class="dd-item" data-id="' + p.id + '" data-name="' + p.name.replace(/"/g, '&quot;') + '" data-idx="' + i + '"'
+        + ' onmouseenter="window.ddHighlight(' + i + ')" onclick="window.ddSelect(this)"'
+        + ' style="display:flex;justify-content:space-between;align-items:center;padding:0.55rem 1rem;cursor:pointer;'
+        + 'opacity:' + (noStock ? '0.45' : '1') + ';border-bottom:1px solid rgba(255,255,255,0.04);">'
+        + '<div><span style="font-weight:500;color:var(--white);font-size:0.88rem;">' + p.name + '</span>'
+        + '<span style="font-size:0.75rem;color:var(--gray-3);margin-left:0.4rem;">(' + p.code + ')</span></div>'
         + '<div style="display:flex;gap:0.5rem;align-items:center;">'
-        + '<span style="color:var(--purple-300);font-weight:600;font-size:0.88rem;">$' + price + '</span>'
-        + '<span style="font-size:0.7rem;color:' + scolor + ';">' + stock + '</span>'
-        + '</div>'
-        + '</div>';
+        + '<span style="color:var(--purple-300);font-weight:600;font-size:0.88rem;">$' + parseFloat(p.price).toFixed(2) + '</span>'
+        + '<span style="font-size:0.7rem;color:' + (noStock ? 'var(--danger)' : 'var(--text-muted)') + ';">'
+        + (noStock ? 'Sin stock' : p.stockLevel + ' uds.') + '</span>'
+        + '</div></div>';
     }
     dd.innerHTML = html;
     dd.style.display = 'block';
@@ -370,7 +263,6 @@
     });
   };
 
-  /* Al hacer clic en un producto del dropdown → agrega directo a la lista */
   window.ddSelect = function(el) {
     var id   = el.getAttribute('data-id');
     var name = el.getAttribute('data-name');
@@ -380,7 +272,6 @@
     var m   = raw.match(/^(\d+)\*/);
     document.getElementById('product-search').value = m ? m[0] + name : name;
     closeDropdown();
-    addProduct();   // ← agrega automaticamente
   };
 
   function closeDropdown() {
@@ -402,113 +293,13 @@
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (highlightedIndex >= 0 && items[highlightedIndex]) {
-        // Ya hay un item resaltado en el dropdown → seleccionarlo
         window.ddSelect(items[highlightedIndex]);
-      } else if (items.length > 0) {
-        // Hay resultados en el dropdown → seleccionar el primero
-        window.ddSelect(items[0]);
-      } else if (document.getElementById('search-dropdown').style.display === 'block') {
-        // Dropdown abierto pero sin resultados → no hacer nada
-      } else {
-        // Dropdown cerrado → buscar primero, luego agregar
-        var raw = document.getElementById('product-search').value.trim();
-        if (!raw) return;
-        var parsed = parseInput(raw);
-        if (!parsed.query) return;
-        fetchSuggestionsAndAdd(parsed.query, parsed.quantity);
       }
+      addProduct();
     } else if (e.key === 'Escape') {
       closeDropdown();
     }
   };
-
-  // Busca sugerencias y si hay exactamente 1 resultado lo agrega directo;
-  // si hay varios, muestra el dropdown para que el usuario elija.
-  async function fetchSuggestionsAndAdd(query, quantity) {
-    try {
-      var res = await fetch('/sale/search-products?q=' + encodeURIComponent(query));
-      if (!res.ok) { closeDropdown(); showError('Producto no encontrado.'); return; }
-      var products = await res.json();
-      if (!products || !products.length) {
-        showError('No se encontraron productos con "' + query + '".');
-        return;
-      }
-      if (products.length === 1) {
-        // Un solo resultado → agregar directo
-        selectedProductId = products[0].id;
-        var raw = document.getElementById('product-search').value;
-        var m   = raw.match(/^(\d+)\*/);
-        document.getElementById('product-search').value = m ? m[0] + products[0].name : products[0].name;
-        closeDropdown();
-        addProduct();
-      } else {
-        // Varios resultados → mostrar dropdown
-        renderDropdown(products);
-      }
-    } catch(e) { closeDropdown(); showError('Error de conexion.'); }
-  }
-
-  /* ── Selección de fila con ↑ ↓ y cantidad con + / - ─────────────────── */
-
-  function highlightRow(idx) {
-    var s = activeSale();
-    if (!s || !s.items) return;
-    var rows = document.querySelectorAll('#items-body tr');
-    rows.forEach(function(r, i) {
-      r.style.background = i === idx ? 'rgba(124,58,237,0.18)' : '';
-      r.style.outline    = i === idx ? '1px solid var(--purple-500)' : '';
-    });
-    selectedRowIndex = idx;
-  }
-
-  document.addEventListener('keydown', function(e) {
-    var tag = document.activeElement ? document.activeElement.tagName : '';
-    var isSearchFocused = document.activeElement === document.getElementById('product-search');
-    var isBodyFocused   = tag === 'BODY' || tag === '' || isSearchFocused;
-    if (!isBodyFocused) return;
-
-    var s = activeSale();
-    if (!s || !s.items || !s.items.length) return;
-    var n = s.items.length;
-
-    // ↓ → baja una fila
-    if (e.key === 'ArrowDown' && !document.getElementById('search-dropdown').style.display.includes('block')) {
-      e.preventDefault();
-      var next = selectedRowIndex < n - 1 ? selectedRowIndex + 1 : 0;
-      highlightRow(next);
-      return;
-    }
-
-    // ↑ → sube una fila
-    if (e.key === 'ArrowUp' && !document.getElementById('search-dropdown').style.display.includes('block')) {
-      e.preventDefault();
-      var prev = selectedRowIndex > 0 ? selectedRowIndex - 1 : n - 1;
-      highlightRow(prev);
-      return;
-    }
-
-    // + → sube cantidad de la fila seleccionada (o última si ninguna)
-    if (e.key === '+' || e.key === '=') {
-      e.preventDefault();
-      var idx = selectedRowIndex >= 0 && selectedRowIndex < n ? selectedRowIndex : n - 1;
-      window.updateQty(idx, (s.items[idx].quantity || 1) + 1);
-      renderItems();
-      highlightRow(idx);
-      return;
-    }
-
-    // - → baja cantidad de la fila seleccionada (mínimo 1)
-    if (e.key === '-' || e.key === '_') {
-      e.preventDefault();
-      var idx = selectedRowIndex >= 0 && selectedRowIndex < n ? selectedRowIndex : n - 1;
-      var newQty = (s.items[idx].quantity || 1) - 1;
-      if (newQty < 1) newQty = 1;
-      window.updateQty(idx, newQty);
-      renderItems();
-      highlightRow(idx);
-      return;
-    }
-  });
 
   document.addEventListener('click', function(e) {
     var input = document.getElementById('product-search');
@@ -516,10 +307,29 @@
     if (input && dd && !input.contains(e.target) && !dd.contains(e.target)) closeDropdown();
   });
 
-  /* ── agregar producto ────────────────────────────────────────────────── */
+  // ── Acciones de venta ────────────────────────────────────────────────────────
+  window.startSale = async function() {
+    try {
+      var res  = await fetch('/sale/start', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      var data = await res.json();
+      if (!res.ok) { showError(data.error || 'Error al iniciar.'); return; }
+      tabCounter++;
+      var id = data.id;
+      sales[id]  = { id: id, label: 'Venta ' + tabCounter, items: data.items || [] };
+      saleOrder.push(id);
+      activeId = id;
+      renderTabs();
+      renderItems();
+      document.getElementById('product-search').value = '';
+      selectedProductId = null;
+      highlightedIndex  = -1;
+      closeDropdown();
+      document.getElementById('product-search').focus();
+    } catch (e) { showError('Error al iniciar.'); }
+  };
 
   async function addProduct() {
-    if (!activeId) { showError('Primero crea una venta con "+ Nueva Venta".'); return; }
+    if (!activeId) { showError('Primero crea una nueva venta.'); return; }
     var raw = document.getElementById('product-search').value.trim();
     if (!raw) return;
 
@@ -527,7 +337,6 @@
     var productRef = selectedProductId || parsed.query;
     var qty        = parsed.quantity;
 
-    // limpiar input de inmediato
     document.getElementById('product-search').value = '';
     selectedProductId = null;
     closeDropdown();
@@ -541,103 +350,91 @@
       });
       var data = await res.json();
       if (!res.ok) { showError(data.error || 'Producto no encontrado.'); return; }
-      sales[activeId].items = data.items || [];
+      var s = activeSale();
+      if (s) { s.items = data.items || []; }
       renderTabs();
       renderItems();
-    } catch(e) { showError('Error de conexion.'); }
+    } catch (e) { showError('Error de conexion.'); }
   }
 
-  /* ── render ──────────────────────────────────────────────────────────── */
-
-  function updateHeader() {
-    var s = activeSale();
-    var n = s && s.items ? s.items.length : 0;
-    document.getElementById('items-count').textContent = n + ' producto' + (n !== 1 ? 's' : '');
-    var show = s && n > 0 ? 'inline-flex' : 'none';
-    document.getElementById('btn-pay').style.display        = show;
-    document.getElementById('btn-pay-footer').style.display = show;
-  }
-
+  // ── Renderizado de items ─────────────────────────────────────────────────────
   function renderItems() {
-    var s     = activeSale();
-    var items = s ? (s.items || []) : [];
-    var tbody = document.getElementById('items-body');
-    var n     = items.length;
+    var s         = activeSale();
+    var items     = s ? (s.items || []) : [];
+    var tbody     = document.getElementById('items-body');
+    var n         = items.length;
 
+    document.getElementById('items-count').textContent  = n + ' producto' + (n !== 1 ? 's' : '');
     document.getElementById('footer-count').textContent = n;
-    updateHeader();
 
     if (!n) {
-      var msg = s
-        ? 'Busca un producto para agregarlo a esta venta'
-        : 'Haz clic en <strong>+ Nueva Venta</strong> para comenzar';
+      var msg = activeId ? 'Agrega productos a esta venta' : 'Haz clic en "+ Nueva Venta" para comenzar';
       tbody.innerHTML = '<tr><td colspan="5" class="empty-state" style="padding:4rem 1rem;">'
         + '<div style="font-size:2.5rem;margin-bottom:0.6rem;">&#128722;</div>'
         + '<div>' + msg + '</div></td></tr>';
       document.getElementById('sale-total').textContent    = '0.00';
       document.getElementById('sale-subtotal').textContent = '0.00';
+      updateHeader();
       return;
     }
 
     var rows = '';
+    var saleId = activeId; // captura para los closures inline
     for (var i = 0; i < items.length; i++) {
       var item  = items[i];
       var price = parseFloat(item.unitPrice || item.price || 0);
-      var sub   = parseFloat(item.subtotal  || (price * parseInt(item.quantity || 1)));
+      var sub   = parseFloat(item.subtotal  || (price * parseInt(item.quantity || 1, 10)));
       rows += '<tr>'
         + '<td style="font-weight:500;font-size:0.88rem;">' + (item.productName || item.productId) + '</td>'
         + '<td style="color:var(--purple-300);font-weight:600;font-size:0.88rem;">$' + price.toFixed(2) + '</td>'
-        + '<td><div style="display:flex;align-items:center;gap:0.25rem;">'
-        + '<button onclick="window.updateQty(' + i + ', ' + (item.quantity - 1) + ')" style="width:26px;height:26px;background:var(--dark-3);border:1px solid var(--gray-1);border-radius:4px;color:var(--white);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;" tabindex="-1">&#8722;</button>'
-        + '<input type="number" min="1" value="' + item.quantity + '" id="qty-' + i + '"'
-        + ' style="width:44px;padding:0.28rem 0.3rem;background:var(--dark-3);border:1px solid var(--gray-1);border-radius:5px;color:var(--white);font-family:inherit;font-size:0.85rem;text-align:center;"'
-        + ' onchange="window.updateQty(' + i + ',this.value)">'
-        + '<button onclick="window.updateQty(' + i + ', ' + (item.quantity + 1) + ')" style="width:26px;height:26px;background:var(--dark-3);border:1px solid var(--gray-1);border-radius:4px;color:var(--white);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;" tabindex="-1">&#43;</button>'
-        + '</div></td>'
+        + '<td><input type="number" min="1" value="' + item.quantity + '" '
+        + 'style="width:64px;padding:0.28rem 0.4rem;background:var(--dark-3);border:1px solid var(--gray-1);border-radius:5px;color:var(--white);font-family:inherit;font-size:0.85rem;" '
+        + 'onchange="window.updateQty(\'' + saleId + '\',' + i + ',this.value)"></td>'
         + '<td id="sub-' + i + '" style="font-weight:600;font-size:0.88rem;">$' + sub.toFixed(2) + '</td>'
-        + '<td style="text-align:center;"><button class="btn btn-danger" style="padding:0.25rem 0.55rem;font-size:0.75rem;" onclick="window.removeItem(' + i + ')">X</button></td>'
+        + '<td style="text-align:center;"><button class="btn btn-danger" style="padding:0.25rem 0.55rem;font-size:0.75rem;" '
+        + 'onclick="window.removeItem(\'' + saleId + '\',' + i + ')">&#10005;</button></td>'
         + '</tr>';
     }
     tbody.innerHTML = rows;
-    recalcTotal();
+    recalcTotal(items);
+    updateHeader();
   }
 
-  window.updateQty = function(idx, val) {
-    var s = activeSale();
-    if (!s) return;
-    var qty   = parseInt(val) || 1;
+  window.updateQty = function(saleId, idx, val) {
+    var s = sales[saleId];
+    if (!s || !s.items[idx]) return;
+    var qty   = parseInt(val, 10) || 1;
     var price = parseFloat(s.items[idx].unitPrice || s.items[idx].price || 0);
     s.items[idx].quantity = qty;
     s.items[idx].subtotal = price * qty;
-    document.getElementById('sub-' + idx).textContent = '$' + s.items[idx].subtotal.toFixed(2);
-    recalcTotal();
-    renderTabs();
+    var subEl = document.getElementById('sub-' + idx);
+    if (subEl) subEl.textContent = '$' + s.items[idx].subtotal.toFixed(2);
+    recalcTotal(s.items);
+    renderTabs(); // actualiza contador y total en la tab
   };
 
-  window.removeItem = function(idx) {
-    var s = activeSale();
+  window.removeItem = function(saleId, idx) {
+    var s = sales[saleId];
     if (!s) return;
     s.items.splice(idx, 1);
     renderTabs();
     renderItems();
   };
 
-  function recalcTotal() {
-    var s     = activeSale();
-    var total = s ? calcSaleTotal(s.items) : 0;
+  function recalcTotal(items) {
+    var total = (items || []).reduce(function(acc, it) { return acc + parseFloat(it.subtotal || 0); }, 0);
     document.getElementById('sale-total').textContent    = total.toFixed(2);
     document.getElementById('sale-subtotal').textContent = total.toFixed(2);
   }
 
-  /* ── pago ────────────────────────────────────────────────────────────── */
-
+  // ── Pago ─────────────────────────────────────────────────────────────────────
   window.showPaymentModal = function() {
     var s = activeSale();
     if (!s || !s.items || !s.items.length) { showError('Agrega productos antes de pagar.'); return; }
-    document.getElementById('modal-total').textContent      = document.getElementById('sale-total').textContent;
-    document.getElementById('payment-amount').value         = '';
-    document.getElementById('change-display').style.display = 'none';
-    document.getElementById('payment-error').style.display  = 'none';
+    document.getElementById('modal-total').textContent        = document.getElementById('sale-total').textContent;
+    document.getElementById('payment-amount').value           = '';
+    document.getElementById('change-display').style.display   = 'none';
+    document.getElementById('payment-error').style.display    = 'none';
     document.getElementById('payment-modal').classList.add('open');
     setTimeout(function() { document.getElementById('payment-amount').focus(); }, 100);
   };
@@ -662,7 +459,7 @@
     var errEl  = document.getElementById('payment-error');
     errEl.style.display = 'none';
     if (!amount || amount <= 0) { errEl.textContent = 'Ingresa un monto valido.'; errEl.style.display = 'flex'; return; }
-    if (amount < total)         { errEl.textContent = 'Monto insuficiente. Total: $' + total.toFixed(2); errEl.style.display = 'flex'; return; }
+    if (amount < total) { errEl.textContent = 'Monto insuficiente. Total: $' + total.toFixed(2); errEl.style.display = 'flex'; return; }
     try {
       var res  = await fetch('/sale/' + activeId + '/pay', {
         method: 'POST',
@@ -673,268 +470,31 @@
       if (!res.ok) { errEl.textContent = data.error || 'Error al procesar.'; errEl.style.display = 'flex'; return; }
       var change = data.change !== undefined ? data.change : (amount - total);
       window.closePaymentModal();
+      // Remover la tab pagada y cambiar a la siguiente si existe
+      var paidId = activeId;
+      window.closeTab(paidId);
       alert('Pago exitoso! Cambio: $' + parseFloat(change).toFixed(2));
-      window.closeTab(activeId);   // cierra el tab de la venta pagada
-    } catch(e) { errEl.textContent = 'Error al procesar.'; errEl.style.display = 'flex'; }
+    } catch (e) { errEl.textContent = 'Error al procesar.'; errEl.style.display = 'flex'; }
   };
 
   document.getElementById('payment-modal').addEventListener('click', function(e) {
     if (e.target === this) window.closePaymentModal();
   });
 
-  /* ── escaner de codigo de barras ─────────────────────────────────────── */
-  var scannerStream = null;
-  var scannerInterval = null;
-  var lastScannedCode = null;
-  var scannerOpen = false;
+  // ── Error UI ──────────────────────────────────────────────────────────────────
+  function showError(msg) {
+    var el = document.getElementById('sale-error');
+    el.textContent    = msg;
+    el.style.display  = 'flex';
+    setTimeout(function() { el.style.display = 'none'; }, 4000);
+  }
 
-  window.openScanner = function() {
-    if (!activeId) { showError('Primero crea una venta con "+ Nueva Venta".'); return; }
-    document.getElementById('scanner-modal').classList.add('open');
-    document.getElementById('scan-result').style.display = 'none';
-    document.getElementById('scanner-error').style.display = 'none';
-    document.getElementById('manual-barcode').value = '';
-    document.getElementById('scanner-status').textContent = 'Iniciando camara...';
-    scannerOpen = true;
-    lastScannedCode = null;
-    startCamera();
-  };
-
-  window.closeScanner = function() {
-    scannerOpen = false;
-    stopCamera();
-    document.getElementById('scanner-modal').classList.remove('open');
-    document.getElementById('scan-line').style.display = 'none';
+  // ── Init ──────────────────────────────────────────────────────────────────────
+  window.addEventListener('load', function() {
+    renderTabs();
     document.getElementById('product-search').focus();
-  };
-
-  function startCamera() {
-    var video = document.getElementById('scanner-video');
-    var errEl = document.getElementById('scanner-error');
-    errEl.style.display = 'none';
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      errEl.textContent = 'Tu navegador no soporta acceso a la camara. Usa el campo manual.';
-      errEl.style.display = 'flex';
-      document.getElementById('scanner-status').textContent = 'Camara no disponible';
-      return;
-    }
-
-    navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-    }).then(function(stream) {
-      scannerStream = stream;
-      video.srcObject = stream;
-      video.play();
-      document.getElementById('scan-line').style.display = 'block';
-      document.getElementById('scanner-status').textContent = 'Apunta al codigo de barras del producto';
-      startDecoding();
-    }).catch(function(err) {
-      errEl.textContent = 'No se pudo acceder a la camara: ' + err.message + '. Usa el campo manual.';
-      errEl.style.display = 'flex';
-      document.getElementById('scanner-status').textContent = 'Camara no disponible';
-    });
-  }
-
-  function stopCamera() {
-    if (scannerInterval) { clearInterval(scannerInterval); scannerInterval = null; }
-    if (scannerStream) {
-      scannerStream.getTracks().forEach(function(t) { t.stop(); });
-      scannerStream = null;
-    }
-    var video = document.getElementById('scanner-video');
-    video.srcObject = null;
-  }
-
-  function startDecoding() {
-    // Usamos BarcodeDetector API nativa si está disponible (Chrome/Edge modernos)
-    if ('BarcodeDetector' in window) {
-      var detector = new BarcodeDetector({
-        formats: ['ean_13','ean_8','code_128','code_39','upc_a','upc_e','qr_code','data_matrix']
-      });
-      var video = document.getElementById('scanner-video');
-      scannerInterval = setInterval(async function() {
-        if (!scannerOpen || video.readyState < 2) return;
-        try {
-          var barcodes = await detector.detect(video);
-          if (barcodes && barcodes.length > 0) {
-            var code = barcodes[0].rawValue;
-            if (code && code !== lastScannedCode) {
-              lastScannedCode = code;
-              onBarcodeDetected(code);
-            }
-          }
-        } catch(e) {}
-      }, 300);
-    } else {
-      // Fallback: ZXing via CDN
-      loadZxing();
-    }
-  }
-
-  function loadZxing() {
-    if (document.getElementById('zxing-script')) { initZxing(); return; }
-    var s = document.createElement('script');
-    s.id = 'zxing-script';
-    s.src = 'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js';
-    s.onload = initZxing;
-    s.onerror = function() {
-      document.getElementById('scanner-status').textContent = 'Libreria no disponible. Usa el campo manual.';
-    };
-    document.head.appendChild(s);
-  }
-
-  function initZxing() {
-    var video = document.getElementById('scanner-video');
-    try {
-      var codeReader = new ZXing.BrowserMultiFormatReader();
-      codeReader.decodeFromVideoElement(video, function(result, err) {
-        if (result && result.text && result.text !== lastScannedCode) {
-          lastScannedCode = result.text;
-          onBarcodeDetected(result.text);
-        }
-      });
-      // Guardar referencia para poder detenerlo
-      window._zxingReader = codeReader;
-    } catch(e) {
-      document.getElementById('scanner-status').textContent = 'Error al iniciar decodificador. Usa el campo manual.';
-    }
-  }
-
-  function onBarcodeDetected(code) {
-    // Feedback visual
-    document.getElementById('scan-result').style.display = 'flex';
-    document.getElementById('scan-result-code').textContent = code;
-    document.getElementById('scanner-status').textContent = 'Codigo detectado! Buscando producto...';
-
-    // Vibrar si el dispositivo lo soporta
-    if (navigator.vibrate) navigator.vibrate(100);
-
-    // Agregar producto por codigo
-    addByBarcode(code);
-  }
-
-  window.addByBarcode = async function(code) {
-    code = (code || '').trim();
-    if (!code) return;
-    if (!activeId) { showError('Primero crea una venta.'); closeScanner(); return; }
-
-    document.getElementById('scanner-status').textContent = 'Buscando: ' + code + '...';
-
-    try {
-      var res  = await fetch('/sale/' + activeId + '/item', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ product_id: code, quantity: 1 })
-      });
-      var data = await res.json();
-      if (!res.ok) {
-        document.getElementById('scanner-status').textContent = 'Producto no encontrado: ' + code;
-        document.getElementById('scanner-error').textContent = data.error || 'Producto no encontrado para el codigo: ' + code;
-        document.getElementById('scanner-error').style.display = 'flex';
-        lastScannedCode = null; // permitir reintentar
-        return;
-      }
-      sales[activeId].items = data.items || [];
-      renderTabs();
-      renderItems();
-      document.getElementById('scanner-status').textContent = 'Producto agregado! Escanea otro...';
-      document.getElementById('scanner-error').style.display = 'none';
-      document.getElementById('manual-barcode').value = '';
-      // Resetear para permitir escanear el mismo codigo de nuevo
-      setTimeout(function() { lastScannedCode = null; }, 1500);
-    } catch(e) {
-      document.getElementById('scanner-error').textContent = 'Error de conexion.';
-      document.getElementById('scanner-error').style.display = 'flex';
-    }
-  };
-
-  document.getElementById('scanner-modal').addEventListener('click', function(e) {
-    if (e.target === this) closeScanner();
   });
 
-  /* ── atajos de teclado POS ───────────────────────────────────────────── */
-  document.addEventListener('keydown', function(e) {
-    var modal = document.getElementById('payment-modal');
-    var modalOpen = modal.classList.contains('open');
-
-    // F2 → Nueva Venta
-    if (e.key === 'F2') {
-      e.preventDefault();
-      window.startSale();
-      return;
-    }
-
-    // F3 → Abrir escaner
-    if (e.key === 'F3') {
-      e.preventDefault();
-      window.openScanner();
-      return;
-    }
-
-    // F4 → Ir a Pagar
-    if (e.key === 'F4') {
-      e.preventDefault();
-      if (modalOpen) {
-        window.processPay();
-      } else {
-        window.showPaymentModal();
-      }
-      return;
-    }
-
-    // F5 → Cerrar venta activa
-    if (e.key === 'F5') {
-      e.preventDefault();
-      if (modalOpen) {
-        window.closePaymentModal();
-      } else if (activeId) {
-        if (confirm('Cerrar la venta activa?')) window.closeTab(activeId);
-      }
-      return;
-    }
-
-    // Ctrl+Tab → siguiente venta / Ctrl+Shift+Tab → anterior venta
-    if (e.ctrlKey && e.key === 'Tab') {
-      e.preventDefault();
-      if (saleOrder.length < 2) return;
-      var idx = saleOrder.indexOf(activeId);
-      var next = e.shiftKey
-        ? (idx - 1 + saleOrder.length) % saleOrder.length
-        : (idx + 1) % saleOrder.length;
-      window.switchTab(saleOrder[next]);
-      return;
-    }
-
-    // Escape → cerrar modal si está abierto
-    if (e.key === 'Escape' && modalOpen) {
-      e.preventDefault();
-      window.closePaymentModal();
-      return;
-    }
-
-    // Enter dentro del modal → confirmar pago
-    if (e.key === 'Enter' && modalOpen) {
-      var active = document.activeElement;
-      // solo si no está en el select o en un botón
-      if (active && active.tagName !== 'BUTTON' && active.tagName !== 'SELECT') {
-        e.preventDefault();
-        window.processPay();
-      }
-      return;
-    }
-  });
-
-  /* ── tooltip de atajos (F1) ──────────────────────────────────────────── */
-  var shortcutsVisible = false;
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'F1') {
-      e.preventDefault();
-      var tip = document.getElementById('shortcuts-tip');
-      shortcutsVisible = !shortcutsVisible;
-      tip.style.display = shortcutsVisible ? 'block' : 'none';
-    }
-  });
 })();
 </script>
 {% endblock %}
